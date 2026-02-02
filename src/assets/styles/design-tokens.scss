@@ -1,0 +1,461 @@
+/**
+ * @file design-tokens.scss
+ * @description 桌面原生化设计令牌（Design Tokens）
+ * @note 参考 Fluent Design + macOS Big Sur + VS Code
+ */
+
+/* ==================== 配色系统 ==================== */
+
+:root {
+  /* ========== 暗黑模式（默认）========== */
+  
+  /* 背景色阶（原型风格 - Slate系列） */
+  --color-bg-primary: #0f172a;      /* 原型 background-dark */
+  --color-bg-secondary: #1e293b;    /* 原型 surface-dark */
+  --color-bg-elevated: #2d2d30;     /* 悬浮层（卡片/弹窗） */
+  --color-bg-overlay: #3c3c3c;      /* 遮罩/覆盖层 */
+  
+  /* 边框色阶（原型风格） */
+  --color-border-subtle: #2b2b2b;   /* 微妙边框 */
+  --color-border-default: #334155;  /* 原型 border-dark */
+  --color-border-strong: #475569;   /* 强调边框 */
+  --color-border-interactive: #2563eb; /* 原型主题色 */
+  
+  /* 文字色阶（可读性优先） */
+  --color-text-primary: #e4e4e7;    /* 主文字 */
+  --color-text-secondary: #a1a1aa;  /* 次要文字 */
+  --color-text-tertiary: #71717a;   /* 三级文字 */
+  --color-text-disabled: #52525b;   /* 禁用文字 */
+  --color-text-link: #569cd6;       /* 链接文字 */
+  
+  /* 功能色（原型风格 - Vibrant Blue） */
+  --color-accent-blue: #2563eb;     /* 原型主题色 */
+  --color-accent-blue-hover: #3b82f6; /* 原型hover色 */
+  --color-accent-success: #0e7c3f;  /* 成功（低饱和度） */
+  --color-accent-warning: #f59e0b;  /* 警告 */
+  --color-accent-danger: #dc3545;   /* 危险 */
+  
+  /* 状态色（环境状态） */
+  --color-status-running: #0e7c3f;
+  --color-status-stopped: #71717a;
+  --color-status-error: #dc3545;
+  --color-status-warning: #f59e0b;
+  
+  /* 状态背景色（浅色标签/徽章） */
+  --color-status-success-bg: #ecfdf5;
+  --color-status-success-text: #059669;
+  --color-status-success-border: #d1fae5;
+  --color-status-error-bg: #fef2f2;
+  --color-status-error-text: #dc2626;
+  --color-status-error-border: #fee2e2;
+  --color-status-warning-bg: #fff7ed;
+  --color-status-warning-text: #ea580c;
+  --color-status-warning-border: #fed7aa;
+  --color-status-info-bg: #eff6ff;
+  --color-status-info-text: #2563eb;
+  --color-status-info-border: #dbeafe;
+  --color-status-neutral-bg: #f8fafc;
+  --color-status-neutral-text: #64748b;
+  --color-status-neutral-border: #e2e8f0;
+  
+  /* 协议/类型徽章色 */
+  --color-badge-blue-bg: #dbeafe;
+  --color-badge-blue-text: #1e4ed8;
+  --color-badge-orange-bg: #ffedd5;
+  --color-badge-orange-text: #c2410c;
+  --color-badge-pink-bg: #fce7f3;
+  --color-badge-pink-text: #be185d;
+  --color-badge-purple-bg: #f3e8ff;
+  --color-badge-purple-text: #7e22ce;
+  --color-badge-green-bg: #dcfce7;
+  --color-badge-green-text: #16a34a;
+  --color-badge-indigo-bg: #e0e7ff;
+  --color-badge-indigo-text: #4f46e5;
+  
+  /* 星标/评分色 */
+  --color-rating-star: #eab308;
+  
+  /* 品牌渐变（图标装饰） */
+  --gradient-brand-blue: linear-gradient(to right, #3b82f6, #22d3ee);
+  --gradient-brand-orange: linear-gradient(to right, #fb923c, #facc15);
+  --gradient-brand-pink: linear-gradient(to right, #ec4899, #f43f5e);
+  --gradient-brand-purple: linear-gradient(to right, #a855f7, #6366f1);
+  --gradient-brand-red: linear-gradient(to right, #ef4444, #f97316);
+  
+  /* 交互色（hover/active - 原型风格） */
+  --color-hover-bg: rgba(255, 255, 255, 0.04);
+  --color-active-bg: rgba(255, 255, 255, 0.08);
+  --color-selected-bg: rgba(37, 99, 235, 0.12); /* 使用原型蓝色 */
+  
+  /* ==================== 高级渐变系统 ==================== */
+  /* 主要渐变（Premium Gradients） */
+  --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --gradient-primary-hover: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+  --gradient-info: linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%);
+  --gradient-success: linear-gradient(135deg, #10b981 0%, #06b6d4 100%);
+  --gradient-warning: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%);
+  --gradient-danger: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  
+  /* 微妙背景渐变 */
+  --gradient-subtle: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, transparent 100%);
+  --gradient-card: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, transparent 100%);
+  
+  /* 横向渐变（用于横幅等） */
+  --gradient-horizontal-primary: linear-gradient(90deg, rgba(102, 126, 234, 0.12) 0%, rgba(118, 75, 162, 0.04) 100%);
+  --gradient-horizontal-warning: linear-gradient(90deg, rgba(245, 158, 11, 0.12) 0%, rgba(239, 68, 68, 0.04) 100%);
+  
+  /* ========== 统一颜色别名（便于组件使用）========== */
+  /* 页面/组件级别色 */
+  --color-bg-page: #0f172a;
+  --color-bg-hover: rgba(255, 255, 255, 0.04);
+  --color-border: #334155;
+  --color-border-hover: #475569;
+  --color-text-muted: #71717a;
+  --color-text-placeholder: #52525b;
+  
+  /* 主色系统一别名 */
+  --color-primary: #2563eb;
+  --color-primary-hover: #1d4ed8;
+  --color-primary-light: #bfdbfe;
+  --color-primary-bg: rgba(37, 99, 235, 0.12);
+  
+  /* 危险色统一别名 */
+  --color-danger: #ef4444;
+  --color-danger-hover: #dc2626;
+  --color-danger-light: #fecaca;
+  --color-danger-bg: rgba(239, 68, 68, 0.12);
+}
+
+/* ========== 白天模式 ========== */
+:root[data-theme="light"],
+:root.theme-light {
+  /* 背景色阶（Apple 风格） */
+  --color-bg-primary: #f5f5f7;
+  --color-bg-secondary: #ffffff;
+  --color-bg-elevated: #ffffff;
+  --color-bg-overlay: #fafafa;
+  
+  /* 边框色阶（原型风格） */
+  --color-border-subtle: #e5e5e5;
+  --color-border-default: #e2e8f0;  /* 原型 border-light */
+  --color-border-strong: #cbd5e1;
+  --color-border-interactive: #2563eb; /* 原型主题色 */
+  
+  /* 文字色阶 */
+  --color-text-primary: #1c1c1e;
+  --color-text-secondary: #3a3a3c;
+  --color-text-tertiary: #8e8e93;
+  --color-text-disabled: #c7c7cc;
+  --color-text-link: #0078d4;
+  
+  /* 功能色（原型风格） */
+  --color-accent-blue: #2563eb;     /* 原型主题色 */
+  --color-accent-blue-hover: #3b82f6; /* 原型hover色 */
+  --color-accent-success: #0e7c3f;
+  --color-accent-warning: #f59e0b;
+  --color-accent-danger: #dc3545;
+  
+  /* 状态色 */
+  --color-status-running: #0e7c3f;
+  --color-status-stopped: #8e8e93;
+  --color-status-error: #dc3545;
+  --color-status-warning: #f59e0b;
+  
+  /* 状态背景色（浅色标签/徽章 - Light模式） */
+  --color-status-success-bg: #ecfdf5;
+  --color-status-success-text: #059669;
+  --color-status-success-border: #d1fae5;
+  --color-status-error-bg: #fef2f2;
+  --color-status-error-text: #dc2626;
+  --color-status-error-border: #fee2e2;
+  --color-status-warning-bg: #fff7ed;
+  --color-status-warning-text: #ea580c;
+  --color-status-warning-border: #fed7aa;
+  --color-status-info-bg: #eff6ff;
+  --color-status-info-text: #2563eb;
+  --color-status-info-border: #dbeafe;
+  --color-status-neutral-bg: #f8fafc;
+  --color-status-neutral-text: #64748b;
+  --color-status-neutral-border: #e2e8f0;
+  
+  /* 协议/类型徽章色（Light模式） */
+  --color-badge-blue-bg: #dbeafe;
+  --color-badge-blue-text: #1e4ed8;
+  --color-badge-orange-bg: #ffedd5;
+  --color-badge-orange-text: #c2410c;
+  --color-badge-pink-bg: #fce7f3;
+  --color-badge-pink-text: #be185d;
+  --color-badge-purple-bg: #f3e8ff;
+  --color-badge-purple-text: #7e22ce;
+  --color-badge-green-bg: #dcfce7;
+  --color-badge-green-text: #16a34a;
+  --color-badge-indigo-bg: #e0e7ff;
+  --color-badge-indigo-text: #4f46e5;
+  
+  /* 星标/评分色 */
+  --color-rating-star: #eab308;
+  
+  /* 品牌渐变 */
+  --gradient-brand-blue: linear-gradient(to right, #3b82f6, #22d3ee);
+  --gradient-brand-orange: linear-gradient(to right, #fb923c, #facc15);
+  --gradient-brand-pink: linear-gradient(to right, #ec4899, #f43f5e);
+  --gradient-brand-purple: linear-gradient(to right, #a855f7, #6366f1);
+  --gradient-brand-red: linear-gradient(to right, #ef4444, #f97316);
+  
+  /* 交互色 */
+  --color-hover-bg: rgba(0, 0, 0, 0.04);
+  --color-active-bg: rgba(0, 0, 0, 0.08);
+  --color-selected-bg: rgba(0, 120, 212, 0.08);
+  
+  /* ========== 统一颜色别名（便于组件使用）========== */
+  /* 页面/组件级别色 */
+  --color-bg-page: #f5f5f7;
+  --color-bg-hover: rgba(0, 0, 0, 0.04);
+  --color-border: #e2e8f0;
+  --color-border-hover: #cbd5e1;
+  --color-text-muted: #64748b;
+  --color-text-placeholder: #94a3b8;
+  
+  /* 主色系统一别名 */
+  --color-primary: #2563eb;
+  --color-primary-hover: #1d4ed8;
+  --color-primary-light: #bfdbfe;
+  --color-primary-bg: #eff6ff;
+  
+  /* 危险色统一别名 */
+  --color-danger: #ef4444;
+  --color-danger-hover: #dc2626;
+  --color-danger-light: #fecaca;
+  --color-danger-bg: #fef2f2;
+}
+
+/* ==================== 间距系统 ==================== */
+:root {
+  --spacing-xs: 4px;    /* 极小间距（图标与文字） */
+  --spacing-sm: 8px;    /* 小间距（按钮内边距） */
+  --spacing-md: 12px;   /* 中间距（卡片内边距） */
+  --spacing-lg: 16px;   /* 大间距（区块间距） */
+  --spacing-xl: 24px;   /* 超大间距（页面边距） */
+  --spacing-2xl: 32px;  /* 特大间距（模块间距） */
+}
+
+/* ==================== 圆角系统 ==================== */
+:root {
+  --radius-sm: 4px;     /* 小元素（标签、徽章） */
+  --radius-md: 6px;     /* 按钮、输入框 */
+  --radius-lg: 8px;     /* 卡片 */
+  --radius-xl: 12px;    /* 弹窗/抽屉 */
+  --radius-full: 9999px; /* 圆形（头像） */
+}
+
+/* ==================== 阴影系统 ==================== */
+:root {
+  /* 外阴影（微妙精致） */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.1);
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.12);
+  --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.16);
+  --shadow-xl: 0 12px 24px rgba(0, 0, 0, 0.20);
+  
+  /* 内阴影（凹陷效果） */
+  --shadow-inset: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+  
+  /* 功能阴影 - 主色系 */
+  --shadow-primary-sm: 0 1px 3px rgba(37, 99, 235, 0.2);
+  --shadow-primary-md: 0 4px 12px rgba(37, 99, 235, 0.25);
+  --shadow-primary-lg: 0 10px 15px -3px rgba(37, 99, 235, 0.3);
+  --shadow-focus-primary: 0 0 0 3px rgba(37, 99, 235, 0.15);
+  
+  /* 功能阴影 - 危险色系 */
+  --shadow-danger-sm: 0 4px 6px -1px rgba(239, 68, 68, 0.2);
+  --shadow-danger-lg: 0 10px 15px -3px rgba(239, 68, 68, 0.35);
+  
+  /* 组件阴影 */
+  --shadow-drawer: -4px 0 16px rgba(0, 0, 0, 0.15);
+}
+
+/* 白天模式阴影（更淡） */
+:root[data-theme="light"],
+:root.theme-light {
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.10);
+  --shadow-xl: 0 12px 24px rgba(0, 0, 0, 0.12);
+}
+
+/* ==================== 动画系统 ==================== */
+:root {
+  /* 缓动函数（Apple 风格） */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-in-out-cubic: cubic-bezier(0.65, 0, 0.35, 1);
+  
+  /* 动画时长（Fluent Design） */
+  --duration-instant: 100ms;   /* 即时反馈 */
+  --duration-fast: 200ms;      /* 快速动画 */
+  --duration-normal: 300ms;    /* 正常动画 */
+  --duration-slow: 500ms;      /* 慢动画 */
+}
+
+/* ==================== 字体系统 ==================== */
+:root {
+  /* 字体家族 */
+  --font-sans: 'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Microsoft YaHei', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Consolas', 'Monaco', monospace;
+  
+  /* 字号阶梯 */
+  --text-xs: 11px;    /* 辅助信息 */
+  --text-sm: 12px;    /* 次要文字 */
+  --text-base: 13px;  /* 主文字（默认） */
+  --text-md: 14px;    /* 按钮、输入框 */
+  --text-lg: 16px;    /* 小标题 */
+  --text-xl: 18px;    /* 标题 */
+  --text-2xl: 24px;   /* 大标题 */
+  
+  /* 字重 */
+  --font-regular: 400;
+  --font-medium: 500;
+  --font-semibold: 600;
+  --font-bold: 700;
+  
+  /* 行高（桌面软件用 1.4） */
+  --leading-tight: 1.25;
+  --leading-normal: 1.4;
+  --leading-relaxed: 1.6;
+}
+
+/* ==================== Z-index 层级 ==================== */
+:root {
+  --z-base: 0;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-fixed: 300;
+  --z-modal-backdrop: 400;
+  --z-modal: 500;
+  --z-popover: 600;
+  --z-tooltip: 700;
+  --z-notification: 800;
+  --z-titlebar: 1000;
+}
+
+/* ==================== 组件高度 ==================== */
+:root {
+  --height-titlebar: 32px;
+  --height-toolbar: 48px;
+  --height-input-sm: 28px;
+  --height-input-md: 32px;
+  --height-input-lg: 36px;
+  --height-button-sm: 28px;
+  --height-button-md: 32px;
+  --height-button-lg: 36px;
+}
+
+/* ==================== 全局基础样式 ==================== */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color var(--duration-normal) var(--ease-out-quart);
+}
+
+/* ==================== 自定义滚动条 ==================== */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border-radius: var(--radius-md);
+  border: 2px solid var(--color-bg-primary);
+  
+  &:hover {
+    background: var(--color-text-tertiary);
+  }
+}
+
+/* ==================== 选中文本 ==================== */
+::selection {
+  background-color: var(--color-selected-bg);
+  color: var(--color-text-primary);
+}
+
+/* ==================== 聚焦样式 ==================== */
+:focus-visible {
+  outline: 2px solid var(--color-border-interactive);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* 禁用默认的聚焦轮廓 */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ==================== 禁用状态 ==================== */
+[disabled],
+.disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  user-select: none;
+}
+
+/* ==================== 工具类 ==================== */
+.text-primary {
+  color: var(--color-text-primary);
+}
+
+.text-secondary {
+  color: var(--color-text-secondary);
+}
+
+.text-tertiary {
+  color: var(--color-text-tertiary);
+}
+
+.bg-primary {
+  background-color: var(--color-bg-primary);
+}
+
+.bg-secondary {
+  background-color: var(--color-bg-secondary);
+}
+
+.bg-elevated {
+  background-color: var(--color-bg-elevated);
+}
+
+.border-subtle {
+  border-color: var(--color-border-subtle);
+}
+
+.border-default {
+  border-color: var(--color-border-default);
+}
+
+.border-strong {
+  border-color: var(--color-border-strong);
+}

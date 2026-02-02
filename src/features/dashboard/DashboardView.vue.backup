@@ -1,0 +1,826 @@
+<script setup lang="ts">
+/**
+ * @description 仪表盘主视图 - 环境列表 (桌面原生化)
+ * @author DeepAgent
+ */
+
+import { ref, computed, onMounted, inject } from 'vue'
+import { useProfileStore } from '@/stores/profile.store'
+import { useGroupStore } from '@/stores/groupStore'
+import type { Profile } from '@/types/profile.types'
+import type { BatchResult } from '@/types'
+import ListHeader from './components/ListHeader.vue'
+import ProfileRow from './components/ProfileRow.vue'
+import ProfileDrawer from '@/features/profile-editor/ProfileDrawer.vue'
+import BatchResultDialog from '@/components/BatchResultDialog.vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { getSettingValue } from '@/api/settingsApi'
+
+// 使用窗口 store
+const profileStore = useProfileStore()
+const groupStore = useGroupStore()
+const navigateTo = inject<(page: string) => void>('navigateTo')
+
+/**
+ * 检查系统设置是否完成
+ * @returns true: 已设置, false: 未设置
+ */
+const checkSystemSettings = async (): Promise<boolean> => {
+  try {
+    const kernelPath = await getSettingValue('kernel_path')
+    if (!kernelPath) {
+      const result = await ElMessageBox.confirm(
+        '浏览器内核路径未设置，无法启动环境。是否前往设置页面？',
+        '配置提示',
+        {
+          type: 'warning',
+          confirmButtonText: '前往设置',
+          cancelButtonText: '取消',
+        }
+      )
+      if (result === 'confirm' && navigateTo) {
+        navigateTo('settings')
+      }
+      return false
+    }
+    return true
+  } catch (e: any) {
+    // 用户取消操作
+    if (e === 'cancel') {
+      return false
+    }
+    // 其他错误
+    ElMessage.error('检查系统设置失败')
+    return false
+  }
+}
+
+// ==================== 状态 ====================
+const isLoading = ref(false)
+const selectedIds = ref<Set<string>>(new Set())
+const searchKeyword = ref('')
+const filterStatus = ref<string>('all')
+const filterGroup = ref<string>('all')  // 新增：分组筛选
+const sortField = ref('updatedAt')
+const sortOrder = ref<'asc' | 'desc'>('desc')
+
+// 分页状态
+const currentPage = ref(1)
+const pageSize = ref(10)
+const pageSizes = [10, 20, 50, 100]
+
+// 抽屉状态
+const drawerVisible = ref(false)
+const editingProfile = ref<Profile | undefined>(undefined)
+
+// 批量操作结果对话框状态
+const batchResultVisible = ref(false)
+const batchResultTitle = ref('')
+const batchResultData = ref<BatchResult | null>(null)
+
+
+// ==================== 计算属性 ====================
+const filteredProfiles = computed(() => {
+  let result = profileStore.profiles
+  
+  // 状态筛选
+  if (filterStatus.value !== 'all') {
+    result = result.filter((p: Profile) => p.status === filterStatus.value)
+  }
+  
+  // 分组筛选（新增）
+  if (filterGroup.value !== 'all') {
+    result = result.filter((p: Profile) => p.group === filterGroup.value)
+  }
+  
+  // 关键词搜索
+  if (searchKeyword.value) {
+    const keyword = searchKeyword.value.toLowerCase()
+    result = result.filter((p: Profile) => 
+      p.name.toLowerCase().includes(keyword) ||
+      p.id.toLowerCase().includes(keyword)
+    )
+  }
+  
+  // 排序
+  result = [...result].sort((a, b) => {
+    const aVal = a[sortField.value as keyof Profile]
+    const bVal = b[sortField.value as keyof Profile]
+    const order = sortOrder.value === 'asc' ? 1 : -1
+    if (typeof aVal === 'string' && typeof bVal === 'string') {
+      return aVal.localeCompare(bVal) * order
+    }
+    return ((aVal as number) - (bVal as number)) * order
+  })
+  
+  return result
+})
+
+// 分页后的数据
+const paginatedProfiles = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  const end = start + pageSize.value
+  return filteredProfiles.value.slice(start, end)
+})
+
+// 总条数
+const totalCount = computed(() => filteredProfiles.value.length)
+
+const isAllSelected = computed(() => 
+  filteredProfiles.value.length > 0 && 
+  filteredProfiles.value.every((p: Profile) => selectedIds.value.has(p.id))
+)
+
+// 所有环境列表（直接引用 store）
+const profiles = computed(() => profileStore.profiles)
+
+const runningCount = computed(() => profileStore.runningCount)
+
+// ==================== 方法 ====================
+const handleSelectAll = (value: boolean) => {
+  if (value) {
+    filteredProfiles.value.forEach((p: Profile) => selectedIds.value.add(p.id))
+  } else {
+    selectedIds.value.clear()
+  }
+}
+
+const handleSelect = (profile: Profile) => {
+  if (selectedIds.value.has(profile.id)) {
+    selectedIds.value.delete(profile.id)
+  } else {
+    selectedIds.value.add(profile.id)
+  }
+}
+
+const handleSort = (field: string) => {
+  if (sortField.value === field) {
+    sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
+  } else {
+    sortField.value = field
+    sortOrder.value = 'asc'
+  }
+}
+
+const handleLaunch = async (id: string) => {
+  // 先检查系统设置
+  const isSettingOk = await checkSystemSettings()
+  if (!isSettingOk) {
+    return
+  }
+  
+  try {
+    await profileStore.startProfile(id)
+    ElMessage.success('启动成功')
+  } catch (e: any) {
+    ElMessage.error(e.message || '启动失败')
+  }
+}
+
+const handleStop = async (id: string) => {
+  try {
+    await profileStore.stopProfile(id)
+    ElMessage.success('停止成功')
+  } catch (e: any) {
+    ElMessage.error(e.message || '停止失败')
+  }
+}
+
+const handleEdit = (profile: Profile) => {
+  editingProfile.value = profile
+  drawerVisible.value = true
+}
+
+const handleDelete = async (id: string) => {
+  try {
+    await ElMessageBox.confirm('确定要删除此环境吗？', '删除确认', {
+      type: 'warning',
+    })
+    await profileStore.deleteProfile(id)
+    selectedIds.value.delete(id)
+    ElMessage.success('删除成功')
+  } catch (e: any) {
+    if (e !== 'cancel') {
+      ElMessage.error('删除失败')
+    }
+  }
+}
+
+const handleCreateNew = () => {
+  console.log('🟢 [Dashboard] handleCreateNew 被调用')
+  console.log('🟢 [Dashboard] editingProfile:', editingProfile.value)
+  console.log('🟢 [Dashboard] drawerVisible 当前值:', drawerVisible.value)
+  editingProfile.value = undefined
+  drawerVisible.value = true
+  console.log('✅ [Dashboard] drawerVisible 设置为:', drawerVisible.value)
+}
+
+const handleDrawerSuccess = async () => {
+  // 刷新列表
+  await profileStore.fetchProfiles()
+}
+
+
+const handleBatchLaunch = async () => {
+  if (selectedIds.value.size === 0) {
+    ElMessage.warning('请先选择环境')
+    return
+  }
+  
+  // 先检查系统设置
+  const isSettingOk = await checkSystemSettings()
+  if (!isSettingOk) {
+    return
+  }
+  
+  try {
+    const ids = Array.from(selectedIds.value)
+    const result = await profileStore.startProfiles(ids)
+    
+    // 显示结果对话框（有失败项时弹窗，全部成功时只提示）
+    if (result.failureCount > 0) {
+      batchResultTitle.value = '批量启动结果'
+      batchResultData.value = result
+      batchResultVisible.value = true
+    } else {
+      ElMessage.success(`批量启动成功（${result.successCount} 个环境）`)
+    }
+  } catch (e: any) {
+    ElMessage.error(e.message || '批量启动失败')
+  }
+}
+
+const handleBatchStop = async () => {
+  if (selectedIds.value.size === 0) {
+    ElMessage.warning('请先选择环境')
+    return
+  }
+  try {
+    const ids = Array.from(selectedIds.value)
+    const result = await profileStore.stopProfiles(ids)
+    
+    // 显示结果对话框（有失败项时弹窗，全部成功时只提示）
+    if (result.failureCount > 0) {
+      batchResultTitle.value = '批量停止结果'
+      batchResultData.value = result
+      batchResultVisible.value = true
+    } else {
+      ElMessage.success(`批量停止成功（${result.successCount} 个环境）`)
+    }
+  } catch (e: any) {
+    ElMessage.error(e.message || '批量停止失败')
+  }
+}
+
+// ==================== 生命周期 ====================
+onMounted(async () => {
+  // 从后端加载真实数据
+  await profileStore.initProfiles()
+  // 初始化分组数据
+  await groupStore.initGroups()
+})
+
+// 暴露方法给父组件
+defineExpose({
+  handleCreateNew,
+})
+</script>
+
+<template>
+  <div class="dashboard-view">
+    <!-- 页面内通知横幅 -->
+        <!-- 通知横幅 - 高级样式 -->
+    <div class="page-notification banner-warning">
+      <div class="notification-icon-wrapper banner-icon">
+        <el-icon><InfoFilled /></el-icon>
+      </div>
+      <div class="notification-content banner-content">
+        <div class="banner-text">
+          当前您使用的是免费版，可以免费使用个人账号管理功能，升级后可使用团队协作、云端同步等高级功能
+        </div>
+      </div>
+      <button class="upgrade-btn banner-action">
+        <el-icon><Promotion /></el-icon>
+        <span>升级账号</span>
+      </button>
+    </div>
+    
+    <!-- 工具栏 -->
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <!-- 统计 -->
+        <div class="stats">
+          <span class="stat-item">
+            共 <strong>{{ profiles.length }}</strong> 个环境
+          </span>
+          <span class="stat-divider"></span>
+          <span class="stat-item running">
+            <span class="dot"></span>
+            运行中 <strong>{{ runningCount }}</strong>
+          </span>
+        </div>
+        
+        <!-- 筛选 -->
+        <div class="filter-select">
+          <el-select v-model="filterStatus" size="small" style="width: 120px; margin-right: 8px">
+            <el-option label="全部状态" value="all" />
+            <el-option label="运行中" value="running" />
+            <el-option label="已停止" value="stopped" />
+          </el-select>
+          
+          <!-- 分组筛选（新增） -->
+          <el-select v-model="filterGroup" size="small" style="width: 140px" placeholder="全部分组">
+            <el-option label="全部分组" value="all" />
+            <el-option
+              v-for="group in groupStore.sortedGroups"
+              :key="group.id"
+              :label="`${group.name} (${group.profileCount || 0})`"
+              :value="group.id"
+            />
+          </el-select>
+        </div>
+      </div>
+      
+      <div class="toolbar-right">
+        <!-- 批量操作 -->
+        <div class="batch-actions">
+          <button class="batch-btn" @click="handleBatchLaunch">
+            <el-icon><VideoPlay /></el-icon>
+            <span>批量启动</span>
+          </button>
+          <button class="batch-btn" @click="handleBatchStop">
+            <el-icon><VideoPause /></el-icon>
+            <span>批量停止</span>
+          </button>
+        </div>
+        
+        <!-- 搜索 -->
+        <div class="search-wrapper">
+          <el-icon class="search-icon"><Search /></el-icon>
+          <input
+            v-model="searchKeyword"
+            type="text"
+            placeholder="搜索环境..."
+            class="search-input"
+          />
+        </div>
+      </div>
+    </div>
+    
+    <!-- 列表 -->
+    <div class="list-container" v-loading="isLoading">
+      <ListHeader
+        :is-all-selected="isAllSelected"
+        :sort-field="sortField"
+        :sort-order="sortOrder"
+        @select-all="handleSelectAll"
+        @sort="handleSort"
+      />
+      
+      <div class="list-body">
+        <ProfileRow
+          v-for="profile in paginatedProfiles"
+          :key="profile.id"
+          :profile="profile"
+          :is-selected="selectedIds.has(profile.id)"
+          @select="handleSelect"
+          @launch="handleLaunch"
+          @stop="handleStop"
+          @edit="handleEdit"
+          @delete="handleDelete"
+        />
+        
+        <!-- 空状态 -->
+        <div v-if="!isLoading && filteredProfiles.length === 0" class="empty-state">
+          <el-icon class="empty-icon"><Files /></el-icon>
+          <p class="empty-text">暂无窗口数据</p>
+          <button class="empty-action" @click="handleCreateNew">
+            <el-icon><Plus /></el-icon>
+            <span>创建新窗口</span>
+          </button>
+        </div>
+      </div>
+      
+      <!-- 分页 -->
+      <div v-if="totalCount > 0" class="pagination-container">
+        <div class="pagination-info">
+          共 <strong>{{ totalCount }}</strong> 条
+        </div>
+        <el-pagination
+          v-model:current-page="currentPage"
+          v-model:page-size="pageSize"
+          :page-sizes="pageSizes"
+          :total="totalCount"
+          :pager-count="7"
+          layout="sizes, prev, pager, next, jumper"
+          background
+          size="small"
+        />
+      </div>
+    </div>
+    
+    <!-- 环境配置抽屉 -->
+    <ProfileDrawer
+      v-model:visible="drawerVisible"
+      :profile="editingProfile"
+      @success="handleDrawerSuccess"
+    />
+    
+    <!-- 批量操作结果对话框 -->
+    <BatchResultDialog
+      v-model:visible="batchResultVisible"
+      :title="batchResultTitle"
+      :result="batchResultData"
+    />
+  </div>
+</template>
+
+<style scoped lang="scss">
+.dashboard-view {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--color-bg-primary);
+}
+
+// 通知横幅
+.page-notification {
+  display: flex;
+  align-items: center;
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: var(--color-notification-bg);
+  border-bottom: 1px solid var(--color-border-subtle);
+  gap: var(--spacing-md);
+  
+  .notification-icon-wrapper {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-accent-blue);
+    border-radius: var(--radius-full);
+    color: white;
+    flex-shrink: 0;
+    
+    .el-icon {
+      font-size: 14px;
+    }
+  }
+  
+  .notification-text {
+    flex: 1;
+    color: var(--color-text-secondary);
+    font-size: var(--text-base);
+    line-height: 1.5;
+  }
+  
+  .upgrade-btn {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    height: 28px;
+    padding: 0 var(--spacing-md);
+    background: var(--color-accent-blue);
+    border: none;
+    border-radius: var(--radius-md);
+    color: white;
+    font-size: var(--text-sm);
+    font-weight: var(--font-medium);
+    cursor: pointer;
+    transition: all var(--duration-fast) var(--ease-out-quart);
+    
+    &:hover {
+      background: var(--color-accent-blue-hover);
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-sm);
+    }
+    
+    &:active {
+      transform: translateY(0);
+    }
+    
+    .el-icon {
+      font-size: 14px;
+    }
+  }
+}
+
+// 工具栏
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-md) var(--spacing-lg);
+  background-color: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border-default);
+}
+
+.toolbar-left,
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-lg);
+}
+
+.stats {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  font-size: var(--text-base);
+  color: var(--color-text-secondary);
+  
+  strong {
+    color: var(--color-text-primary);
+    font-weight: var(--font-semibold);
+  }
+  
+  .stat-divider {
+    width: 1px;
+    height: 16px;
+    background: var(--color-border-default);
+  }
+  
+  .stat-item.running {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    
+    .dot {
+      width: 8px;
+      height: 8px;
+      background-color: var(--color-status-running);
+      border-radius: var(--radius-full);
+      box-shadow: 0 0 8px var(--color-status-running);
+      animation: pulse-dot 2s var(--ease-in-out-cubic) infinite;
+    }
+  }
+}
+
+@keyframes pulse-dot {
+  0%, 100% {
+    box-shadow: 0 0 8px var(--color-status-running);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 16px var(--color-status-running);
+    transform: scale(1.1);
+  }
+}
+
+.filter-select {
+  :deep(.el-select) {
+    .el-input__wrapper {
+      background-color: var(--color-bg-primary);
+      border: 1px solid var(--color-border-default);
+      border-radius: var(--radius-md);
+      box-shadow: none;
+      
+      &:hover {
+        border-color: var(--color-border-strong);
+      }
+      
+      &.is-focus {
+        border-color: var(--color-border-interactive);
+      }
+    }
+  }
+}
+
+.batch-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+.batch-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  height: 28px;
+  padding: 0 var(--spacing-md);
+  background: transparent;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out-quart);
+  
+  &:hover {
+    background: var(--color-hover-bg);
+    border-color: var(--color-border-strong);
+    color: var(--color-text-primary);
+    transform: translateY(-1px);
+  }
+  
+  &:active {
+    transform: translateY(0);
+  }
+  
+  .el-icon {
+    font-size: 14px;
+  }
+}
+
+.search-wrapper {
+  display: flex;
+  align-items: center;
+  width: 200px;
+  height: 28px;
+  padding: 0 var(--spacing-sm);
+  background-color: var(--color-bg-primary);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  transition: all var(--duration-fast) var(--ease-out-quart);
+  
+  &:hover {
+    border-color: var(--color-border-strong);
+  }
+  
+  &:focus-within {
+    border-color: var(--color-border-interactive);
+    box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.1);
+  }
+  
+  .search-icon {
+    color: var(--color-text-tertiary);
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+  
+  .search-input {
+    flex: 1;
+    height: 100%;
+    border: none;
+    background: transparent;
+    color: var(--color-text-primary);
+    font-size: var(--text-sm);
+    padding: 0 var(--spacing-sm);
+    outline: none;
+    
+    &::placeholder {
+      color: var(--color-text-tertiary);
+    }
+  }
+}
+
+// 列表容器（卡片化）
+.list-container {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  margin: var(--spacing-md) var(--spacing-lg);
+  
+  // ✅ 卡片化样式
+  background: white;
+  border: 1px solid var(--color-border-default); // 外边框
+  border-radius: var(--radius-lg); // 8px 圆角
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06); // 微妙阴影
+}
+
+.list-body {
+  flex: 1;
+  overflow-y: auto;
+  
+  // 自定义滚动条（桌面原生感）
+  &::-webkit-scrollbar {
+    width: 8px;
+  }
+  
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  &::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 4px;
+    
+    &:hover {
+      background: rgba(0, 0, 0, 0.25);
+    }
+  }
+}
+
+// 空状态
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-2xl) 0;
+  
+  .empty-icon {
+    font-size: 48px;
+    color: var(--color-text-tertiary);
+    margin-bottom: var(--spacing-lg);
+  }
+  
+  .empty-text {
+    color: var(--color-text-secondary);
+    font-size: var(--text-md);
+    margin-bottom: var(--spacing-lg);
+  }
+  
+  .empty-action {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    height: 36px;
+    padding: 0 var(--spacing-xl);
+    background: var(--color-accent-blue);
+    border: none;
+    border-radius: var(--radius-md);
+    color: white;
+    font-size: var(--text-md);
+    font-weight: var(--font-medium);
+    cursor: pointer;
+    transition: all var(--duration-fast) var(--ease-out-quart);
+    
+    &:hover {
+      background: var(--color-accent-blue-hover);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+    }
+    
+    &:active {
+      transform: translateY(0);
+    }
+  }
+}
+
+// 分页（卡片内部）
+.pagination-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-lg) var(--spacing-xl);
+  border-top: 1px solid var(--color-border-default);
+  background-color: #FAFAFA; // 浅灰背景（区分于内容区）
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg); // 底部圆角
+  
+  .pagination-info {
+    color: var(--color-text-secondary);
+    font-size: var(--text-sm);
+    
+    strong {
+      color: var(--color-text-primary);
+      font-weight: var(--font-semibold);
+    }
+  }
+  
+  :deep(.el-pagination) {
+    --el-pagination-button-bg-color: var(--color-bg-primary);
+    --el-pagination-hover-color: var(--color-accent-blue);
+    
+    .el-pagination__sizes {
+      margin-right: var(--spacing-md);
+    }
+    
+    .el-pager li {
+      background: var(--color-bg-primary);
+      border: 1px solid var(--color-border-default);
+      border-radius: var(--radius-sm);
+      margin: 0 2px;
+      min-width: 28px;
+      height: 28px;
+      line-height: 26px;
+      
+      &:hover {
+        color: var(--color-accent-blue);
+        border-color: var(--color-accent-blue);
+      }
+      
+      &.is-active {
+        background: var(--color-accent-blue);
+        border-color: var(--color-accent-blue);
+        color: white;
+      }
+    }
+    
+    .btn-prev,
+    .btn-next {
+      background: var(--color-bg-primary);
+      border: 1px solid var(--color-border-default);
+      border-radius: var(--radius-sm);
+      min-width: 28px;
+      height: 28px;
+      
+      &:hover:not(:disabled) {
+        color: var(--color-accent-blue);
+        border-color: var(--color-accent-blue);
+      }
+    }
+    
+    .el-pagination__jump {
+      margin-left: var(--spacing-md);
+      
+      .el-input__wrapper {
+        width: 50px;
+        height: 28px;
+      }
+    }
+  }
+}
+</style>

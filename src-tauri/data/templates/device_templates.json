@@ -1,0 +1,757 @@
+{
+    "$schema": "device_template_v1",
+    "version": "1.0.0",
+    "created_at": "2026-01-31",
+    "description": "基于 Steam 2024 硬件调查的真实设备模板",
+    "templates": [
+        {
+            "id": "win10_low_end",
+            "description": "Windows 10 入门级配置（办公/轻度游戏）",
+            "weight": 0.18,
+            "os": {
+                "name": "Windows",
+                "version": "10.0",
+                "platform": "Win32"
+            },
+            "cpu": {
+                "vendor": "Intel",
+                "cores": [
+                    4
+                ],
+                "frequency_range": [
+                    2000,
+                    2999
+                ]
+            },
+            "memory": {
+                "options_gb": [
+                    8,
+                    16
+                ]
+            },
+            "gpu": {
+                "vendor": "NVIDIA",
+                "models": [
+                    {
+                        "name": "GeForce GTX 1650",
+                        "vram_gb": 4,
+                        "webgl_vendor": "Google Inc. (NVIDIA)",
+                        "webgl_renderer": "ANGLE (NVIDIA, NVIDIA GeForce GTX 1650 Direct3D11 vs_5_0 ps_5_0, D3D11)",
+                        "unmasked_vendor": "NVIDIA Corporation",
+                        "unmasked_renderer": "NVIDIA GeForce GTX 1650/PCIe/SSE2"
+                    }
+                ]
+            },
+            "screen": {
+                "resolutions": [
+                    {
+                        "width": 1920,
+                        "height": 1080,
+                        "weight": 0.7
+                    },
+                    {
+                        "width": 1366,
+                        "height": 768,
+                        "weight": 0.3
+                    }
+                ]
+            },
+            "browser": {
+                "user_agents": [
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+                ],
+                "chrome_version_range": [
+                    144,
+                    146
+                ]
+            },
+            "fonts": {
+                "mode": "subset",
+                "common_fonts": [
+                    "Arial",
+                    "Arial Black",
+                    "Calibri",
+                    "Cambria",
+                    "Courier New",
+                    "Georgia",
+                    "Microsoft YaHei",
+                    "Tahoma",
+                    "Times New Roman",
+                    "Verdana"
+                ]
+            },
+            "locale": {
+                "timezones": [
+                    "Asia/Shanghai",
+                    "Asia/Hong_Kong"
+                ],
+                "languages": [
+                    {
+                        "primary": "zh-CN",
+                        "fallback": [
+                            "en-US",
+                            "en"
+                        ]
+                    },
+                    {
+                        "primary": "en-US",
+                        "fallback": [
+                            "en"
+                        ]
+                    }
+                ]
+            }
+        },
+        {
+            "id": "win10_mid_range",
+            "description": "Windows 10 中端配置（主流游戏）",
+            "weight": 0.35,
+            "os": {
+                "name": "Windows",
+                "version": "10.0",
+                "platform": "Win32"
+            },
+            "cpu": {
+                "vendor": "Intel",
+                "cores": [
+                    6,
+                    8
+                ],
+                "frequency_range": [
+                    2300,
+                    3500
+                ]
+            },
+            "memory": {
+                "options_gb": [
+                    16,
+                    32
+                ]
+            },
+            "gpu": {
+                "vendor": "NVIDIA",
+                "models": [
+                    {
+                        "name": "GeForce RTX 3060",
+                        "vram_gb": 12,
+                        "webgl_vendor": "Google Inc. (NVIDIA)",
+                        "webgl_renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)",
+                        "unmasked_vendor": "NVIDIA Corporation",
+                        "unmasked_renderer": "NVIDIA GeForce RTX 3060/PCIe/SSE2"
+                    },
+                    {
+                        "name": "GeForce GTX 1660 Ti",
+                        "vram_gb": 6,
+                        "webgl_vendor": "Google Inc. (NVIDIA)",
+                        "webgl_renderer": "ANGLE (NVIDIA, NVIDIA GeForce GTX 1660 Ti Direct3D11 vs_5_0 ps_5_0, D3D11)",
+                        "unmasked_vendor": "NVIDIA Corporation",
+                        "unmasked_renderer": "NVIDIA GeForce GTX 1660 Ti/PCIe/SSE2"
+                    }
+                ]
+            },
+            "screen": {
+                "resolutions": [
+                    {
+                        "width": 1920,
+                        "height": 1080,
+                        "weight": 0.6
+                    },
+                    {
+                        "width": 2560,
+                        "height": 1440,
+                        "weight": 0.4
+                    }
+                ]
+            },
+            "browser": {
+                "user_agents": [
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+                ],
+                "chrome_version_range": [
+                    144,
+                    146
+                ]
+            },
+            "fonts": {
+                "mode": "subset",
+                "common_fonts": [
+                    "Arial",
+                    "Arial Black",
+                    "Calibri",
+                    "Cambria",
+                    "Courier New",
+                    "Georgia",
+                    "Helvetica",
+                    "Impact",
+                    "Microsoft YaHei",
+                    "SimSun",
+                    "Tahoma",
+                    "Times New Roman",
+                    "Verdana"
+                ]
+            },
+            "locale": {
+                "timezones": [
+                    "Asia/Shanghai",
+                    "America/New_York",
+                    "Europe/London"
+                ],
+                "languages": [
+                    {
+                        "primary": "zh-CN",
+                        "fallback": [
+                            "en-US",
+                            "en"
+                        ]
+                    },
+                    {
+                        "primary": "en-US",
+                        "fallback": [
+                            "en"
+                        ]
+                    }
+                ]
+            }
+        },
+        {
+            "id": "win11_high_end",
+            "description": "Windows 11 高端配置（3A游戏/内容创作）",
+            "weight": 0.15,
+            "os": {
+                "name": "Windows",
+                "version": "11.0",
+                "platform": "Win32"
+            },
+            "cpu": {
+                "vendor": "Intel",
+                "cores": [
+                    8,
+                    12
+                ],
+                "frequency_range": [
+                    3000,
+                    4500
+                ]
+            },
+            "memory": {
+                "options_gb": [
+                    32,
+                    64
+                ]
+            },
+            "gpu": {
+                "vendor": "NVIDIA",
+                "models": [
+                    {
+                        "name": "GeForce RTX 4060",
+                        "vram_gb": 8,
+                        "webgl_vendor": "Google Inc. (NVIDIA)",
+                        "webgl_renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4060 Direct3D11 vs_5_0 ps_5_0, D3D11)",
+                        "unmasked_vendor": "NVIDIA Corporation",
+                        "unmasked_renderer": "NVIDIA GeForce RTX 4060/PCIe/SSE2"
+                    },
+                    {
+                        "name": "GeForce RTX 3070",
+                        "vram_gb": 8,
+                        "webgl_vendor": "Google Inc. (NVIDIA)",
+                        "webgl_renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3070 Direct3D11 vs_5_0 ps_5_0, D3D11)",
+                        "unmasked_vendor": "NVIDIA Corporation",
+                        "unmasked_renderer": "NVIDIA GeForce RTX 3070/PCIe/SSE2"
+                    }
+                ]
+            },
+            "screen": {
+                "resolutions": [
+                    {
+                        "width": 2560,
+                        "height": 1440,
+                        "weight": 0.6
+                    },
+                    {
+                        "width": 1920,
+                        "height": 1080,
+                        "weight": 0.3
+                    },
+                    {
+                        "width": 3840,
+                        "height": 2160,
+                        "weight": 0.1
+                    }
+                ]
+            },
+            "browser": {
+                "user_agents": [
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+                ],
+                "chrome_version_range": [
+                    144,
+                    146
+                ]
+            },
+            "fonts": {
+                "mode": "full",
+                "common_fonts": [
+                    "Arial",
+                    "Arial Black",
+                    "Calibri",
+                    "Cambria",
+                    "Consolas",
+                    "Courier New",
+                    "Georgia",
+                    "Helvetica",
+                    "Impact",
+                    "Microsoft YaHei",
+                    "Segoe UI",
+                    "SimSun",
+                    "Tahoma",
+                    "Times New Roman",
+                    "Trebuchet MS",
+                    "Verdana"
+                ]
+            },
+            "locale": {
+                "timezones": [
+                    "Asia/Shanghai",
+                    "America/New_York",
+                    "Europe/London",
+                    "Asia/Tokyo"
+                ],
+                "languages": [
+                    {
+                        "primary": "en-US",
+                        "fallback": [
+                            "en"
+                        ]
+                    },
+                    {
+                        "primary": "zh-CN",
+                        "fallback": [
+                            "zh",
+                            "en-US",
+                            "en"
+                        ]
+                    }
+                ]
+            }
+        },
+        {
+            "id": "amd_mid_range",
+            "description": "AMD 中端配置（性价比之选）",
+            "weight": 0.15,
+            "os": {
+                "name": "Windows",
+                "version": "10.0",
+                "platform": "Win32"
+            },
+            "cpu": {
+                "vendor": "AMD",
+                "cores": [
+                    6,
+                    8
+                ],
+                "frequency_range": [
+                    3200,
+                    4200
+                ]
+            },
+            "memory": {
+                "options_gb": [
+                    16,
+                    32
+                ]
+            },
+            "gpu": {
+                "vendor": "AMD",
+                "models": [
+                    {
+                        "name": "Radeon RX 6600",
+                        "vram_gb": 8,
+                        "webgl_vendor": "Google Inc. (AMD)",
+                        "webgl_renderer": "ANGLE (AMD, AMD Radeon RX 6600 Direct3D11 vs_5_0 ps_5_0, D3D11)",
+                        "unmasked_vendor": "AMD",
+                        "unmasked_renderer": "AMD Radeon RX 6600"
+                    },
+                    {
+                        "name": "Radeon RX 6700 XT",
+                        "vram_gb": 12,
+                        "webgl_vendor": "Google Inc. (AMD)",
+                        "webgl_renderer": "ANGLE (AMD, AMD Radeon RX 6700 XT Direct3D11 vs_5_0 ps_5_0, D3D11)",
+                        "unmasked_vendor": "AMD",
+                        "unmasked_renderer": "AMD Radeon RX 6700 XT"
+                    }
+                ]
+            },
+            "screen": {
+                "resolutions": [
+                    {
+                        "width": 1920,
+                        "height": 1080,
+                        "weight": 0.7
+                    },
+                    {
+                        "width": 2560,
+                        "height": 1440,
+                        "weight": 0.3
+                    }
+                ]
+            },
+            "browser": {
+                "user_agents": [
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+                ],
+                "chrome_version_range": [
+                    144,
+                    146
+                ]
+            },
+            "fonts": {
+                "mode": "subset",
+                "common_fonts": [
+                    "Arial",
+                    "Calibri",
+                    "Courier New",
+                    "Georgia",
+                    "Microsoft YaHei",
+                    "Tahoma",
+                    "Verdana"
+                ]
+            },
+            "locale": {
+                "timezones": [
+                    "Asia/Shanghai",
+                    "America/Los_Angeles"
+                ],
+                "languages": [
+                    {
+                        "primary": "zh-CN",
+                        "fallback": [
+                            "en-US",
+                            "en"
+                        ]
+                    },
+                    {
+                        "primary": "en-US",
+                        "fallback": [
+                            "en"
+                        ]
+                    }
+                ]
+            }
+        },
+        {
+            "id": "workstation_high_end",
+            "description": "高端工作站（专业工作/AI开发）",
+            "weight": 0.08,
+            "os": {
+                "name": "Windows",
+                "version": "11.0",
+                "platform": "Win32"
+            },
+            "cpu": {
+                "vendor": "AMD",
+                "cores": [
+                    12,
+                    16
+                ],
+                "frequency_range": [
+                    3500,
+                    5000
+                ]
+            },
+            "memory": {
+                "options_gb": [
+                    64,
+                    128
+                ]
+            },
+            "gpu": {
+                "vendor": "NVIDIA",
+                "models": [
+                    {
+                        "name": "GeForce RTX 4080",
+                        "vram_gb": 16,
+                        "webgl_vendor": "Google Inc. (NVIDIA)",
+                        "webgl_renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4080 Direct3D11 vs_5_0 ps_5_0, D3D11)",
+                        "unmasked_vendor": "NVIDIA Corporation",
+                        "unmasked_renderer": "NVIDIA GeForce RTX 4080/PCIe/SSE2"
+                    },
+                    {
+                        "name": "GeForce RTX 4090",
+                        "vram_gb": 24,
+                        "webgl_vendor": "Google Inc. (NVIDIA)",
+                        "webgl_renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4090 Direct3D11 vs_5_0 ps_5_0, D3D11)",
+                        "unmasked_vendor": "NVIDIA Corporation",
+                        "unmasked_renderer": "NVIDIA GeForce RTX 4090/PCIe/SSE2"
+                    }
+                ]
+            },
+            "screen": {
+                "resolutions": [
+                    {
+                        "width": 3840,
+                        "height": 2160,
+                        "weight": 0.5
+                    },
+                    {
+                        "width": 2560,
+                        "height": 1440,
+                        "weight": 0.5
+                    }
+                ]
+            },
+            "browser": {
+                "user_agents": [
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+                ],
+                "chrome_version_range": [
+                    144,
+                    146
+                ]
+            },
+            "fonts": {
+                "mode": "full",
+                "common_fonts": [
+                    "Arial",
+                    "Arial Black",
+                    "Calibri",
+                    "Cambria",
+                    "Consolas",
+                    "Courier New",
+                    "Georgia",
+                    "Helvetica",
+                    "Impact",
+                    "Microsoft YaHei",
+                    "Segoe UI",
+                    "SimSun",
+                    "Source Code Pro",
+                    "Tahoma",
+                    "Times New Roman",
+                    "Verdana"
+                ]
+            },
+            "locale": {
+                "timezones": [
+                    "America/New_York",
+                    "Europe/London",
+                    "Asia/Shanghai"
+                ],
+                "languages": [
+                    {
+                        "primary": "en-US",
+                        "fallback": [
+                            "en"
+                        ]
+                    },
+                    {
+                        "primary": "zh-CN",
+                        "fallback": [
+                            "zh",
+                            "en"
+                        ]
+                    }
+                ]
+            }
+        },
+        {
+            "id": "linux_dev",
+            "description": "Linux 开发环境（Ubuntu/Debian）",
+            "weight": 0.05,
+            "os": {
+                "name": "Linux",
+                "version": "x86_64",
+                "platform": "Linux x86_64"
+            },
+            "cpu": {
+                "vendor": "Intel",
+                "cores": [
+                    8,
+                    12
+                ],
+                "frequency_range": [
+                    2800,
+                    4000
+                ]
+            },
+            "memory": {
+                "options_gb": [
+                    16,
+                    32
+                ]
+            },
+            "gpu": {
+                "vendor": "NVIDIA",
+                "models": [
+                    {
+                        "name": "GeForce RTX 3060",
+                        "vram_gb": 12,
+                        "webgl_vendor": "NVIDIA Corporation",
+                        "webgl_renderer": "NVIDIA GeForce RTX 3060/PCIe/SSE2",
+                        "unmasked_vendor": "NVIDIA Corporation",
+                        "unmasked_renderer": "NVIDIA GeForce RTX 3060/PCIe/SSE2"
+                    }
+                ]
+            },
+            "screen": {
+                "resolutions": [
+                    {
+                        "width": 1920,
+                        "height": 1080,
+                        "weight": 0.8
+                    },
+                    {
+                        "width": 2560,
+                        "height": 1440,
+                        "weight": 0.2
+                    }
+                ]
+            },
+            "browser": {
+                "user_agents": [
+                    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+                ],
+                "chrome_version_range": [
+                    144,
+                    146
+                ]
+            },
+            "fonts": {
+                "mode": "subset",
+                "common_fonts": [
+                    "DejaVu Sans",
+                    "DejaVu Sans Mono",
+                    "Liberation Sans",
+                    "Liberation Mono",
+                    "Ubuntu",
+                    "Noto Sans CJK SC"
+                ]
+            },
+            "locale": {
+                "timezones": [
+                    "Asia/Shanghai",
+                    "America/New_York",
+                    "UTC"
+                ],
+                "languages": [
+                    {
+                        "primary": "en-US",
+                        "fallback": [
+                            "en"
+                        ]
+                    },
+                    {
+                        "primary": "zh-CN",
+                        "fallback": [
+                            "zh",
+                            "en"
+                        ]
+                    }
+                ]
+            }
+        },
+        {
+            "id": "mac_intel",
+            "description": "MacBook Pro (Intel)（创意工作者）",
+            "weight": 0.04,
+            "os": {
+                "name": "MacOS",
+                "version": "10.15.7",
+                "platform": "MacIntel"
+            },
+            "cpu": {
+                "vendor": "Intel",
+                "cores": [
+                    4,
+                    8
+                ],
+                "frequency_range": [
+                    2300,
+                    3500
+                ]
+            },
+            "memory": {
+                "options_gb": [
+                    16,
+                    32
+                ]
+            },
+            "gpu": {
+                "vendor": "Intel",
+                "models": [
+                    {
+                        "name": "Intel Iris Plus Graphics",
+                        "vram_gb": 0,
+                        "webgl_vendor": "Intel Inc.",
+                        "webgl_renderer": "Intel Iris Plus Graphics OpenGL Engine",
+                        "unmasked_vendor": "Intel Inc.",
+                        "unmasked_renderer": "Intel Iris Plus Graphics OpenGL Engine"
+                    }
+                ]
+            },
+            "screen": {
+                "resolutions": [
+                    {
+                        "width": 2560,
+                        "height": 1600,
+                        "weight": 0.6
+                    },
+                    {
+                        "width": 1920,
+                        "height": 1080,
+                        "weight": 0.4
+                    }
+                ]
+            },
+            "browser": {
+                "user_agents": [
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+                ],
+                "chrome_version_range": [
+                    144,
+                    146
+                ]
+            },
+            "fonts": {
+                "mode": "full",
+                "common_fonts": [
+                    "Arial",
+                    "Helvetica",
+                    "Helvetica Neue",
+                    "Times",
+                    "Courier",
+                    "Verdana",
+                    "Georgia",
+                    "Monaco",
+                    "Menlo",
+                    "SF Pro Display",
+                    "PingFang SC"
+                ]
+            },
+            "locale": {
+                "timezones": [
+                    "America/Los_Angeles",
+                    "America/New_York",
+                    "Asia/Shanghai"
+                ],
+                "languages": [
+                    {
+                        "primary": "en-US",
+                        "fallback": [
+                            "en"
+                        ]
+                    },
+                    {
+                        "primary": "zh-CN",
+                        "fallback": [
+                            "zh",
+                            "en"
+                        ]
+                    }
+                ]
+            }
+        }
+    ]
+}

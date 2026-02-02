@@ -1,0 +1,188 @@
+/* Element Plus Dark Theme Overrides */
+/* Chubao - Deep Night Premium */
+
+/* ========================================
+   CSS Variables for Element Plus Dark Mode
+   ======================================== */
+
+:root[data-theme="dark"],
+:root.theme-dark,
+:root:not([data-theme="light"]):not(.theme-light) {
+    /* Background Colors */
+    --el-bg-color: #25262b;
+    --el-bg-color-page: #1a1b1e;
+    --el-bg-color-overlay: #2c2e33;
+
+    /* Text Colors */
+    --el-text-color-primary: #e5eaf3;
+    --el-text-color-regular: #cfd3dc;
+    --el-text-color-secondary: #a3a6ad;
+    --el-text-color-placeholder: #6e7177;
+    --el-text-color-disabled: #4c4f57;
+
+    /* Border Colors */
+    --el-border-color: #363b45;
+    --el-border-color-light: #4c4f57;
+    --el-border-color-lighter: #5c5f66;
+    --el-border-color-extra-light: #6c6f77;
+    --el-border-color-dark: #2c2e33;
+    --el-border-color-darker: #25262b;
+
+    /* Fill Colors */
+    --el-fill-color: #2c2e33;
+    --el-fill-color-light: #363b45;
+    --el-fill-color-lighter: #4c4f57;
+    --el-fill-color-extra-light: #5c5f66;
+    --el-fill-color-dark: #25262b;
+    --el-fill-color-darker: #1a1b1e;
+    --el-fill-color-blank: #25262b;
+
+    /* Primary Color */
+    --el-color-primary: #409eff;
+    --el-color-primary-light-3: #66b1ff;
+    --el-color-primary-light-5: #8cc5ff;
+    --el-color-primary-light-7: #b3d8ff;
+    --el-color-primary-light-8: #c6e2ff;
+    --el-color-primary-light-9: #d9ecff;
+    --el-color-primary-dark-2: #337ecc;
+
+    /* Success Color */
+    --el-color-success: #67c23a;
+    --el-color-success-light-3: #85ce61;
+    --el-color-success-light-5: #a4da74;
+
+    /* Warning Color */
+    --el-color-warning: #e6a23c;
+    --el-color-warning-light-3: #ebb563;
+
+    /* Danger Color */
+    --el-color-danger: #f56c6c;
+    --el-color-danger-light-3: #f78989;
+
+    /* Info Color */
+    --el-color-info: #909399;
+    --el-color-info-light-3: #a6a9ad;
+
+    /* Mask */
+    --el-mask-color: rgba(0, 0, 0, 0.8);
+    --el-mask-color-extra-light: rgba(0, 0, 0, 0.3);
+
+    /* Box Shadow */
+    --el-box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    --el-box-shadow-light: 0 2px 12px rgba(0, 0, 0, 0.3);
+    --el-box-shadow-lighter: 0 1px 6px rgba(0, 0, 0, 0.2);
+    --el-box-shadow-dark: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+/* ========================================
+   Component Overrides
+   ======================================== */
+
+/* Menu */
+.el-menu {
+    background-color: transparent !important;
+    border-right: none !important;
+}
+
+.el-menu-item {
+    color: var(--el-text-color-secondary) !important;
+
+    &:hover {
+        background-color: rgba(255, 255, 255, 0.05) !important;
+        color: var(--el-text-color-primary) !important;
+    }
+
+    &.is-active {
+        background-color: rgba(64, 158, 255, 0.1) !important;
+        color: var(--el-color-primary) !important;
+    }
+}
+
+/* Table */
+.el-table {
+    --el-table-bg-color: #25262b;
+    --el-table-tr-bg-color: #25262b;
+    --el-table-header-bg-color: #2c2e33;
+    --el-table-row-hover-bg-color: #2c2e33;
+    --el-table-border-color: #363b45;
+}
+
+/* Card */
+.el-card {
+    --el-card-bg-color: #25262b;
+    border-color: #363b45 !important;
+}
+
+/* Input */
+.el-input__wrapper {
+    background-color: #2c2e33 !important;
+    box-shadow: 0 0 0 1px #363b45 inset !important;
+
+    &:hover {
+        box-shadow: 0 0 0 1px #4c4f57 inset !important;
+    }
+
+    &.is-focus {
+        box-shadow: 0 0 0 1px var(--el-color-primary) inset !important;
+    }
+}
+
+/* Button */
+.el-button--default {
+    --el-button-bg-color: #2c2e33;
+    --el-button-border-color: #363b45;
+    --el-button-hover-bg-color: #363b45;
+    --el-button-hover-border-color: #4c4f57;
+}
+
+/* Drawer */
+.el-drawer {
+    background-color: #25262b !important;
+}
+
+/* Dialog */
+.el-dialog {
+    --el-dialog-bg-color: #25262b;
+}
+
+/* ========================================
+   CSS Variables for Element Plus Light Mode
+   ======================================== */
+
+:root[data-theme="light"],
+:root.theme-light {
+    /* Background Colors */
+    --el-bg-color: #ffffff;
+    --el-bg-color-page: #f5f7fa;
+    --el-bg-color-overlay: #ffffff;
+
+    /* Text Colors */
+    --el-text-color-primary: #303133;
+    --el-text-color-regular: #606266;
+    --el-text-color-secondary: #909399;
+    --el-text-color-placeholder: #a8abb2;
+    --el-text-color-disabled: #c0c4cc;
+
+    /* Border Colors */
+    --el-border-color: #dcdfe6;
+    --el-border-color-light: #e4e7ed;
+    --el-border-color-lighter: #ebeef5;
+    --el-border-color-extra-light: #f2f6fc;
+    --el-border-color-dark: #d4d7de;
+    --el-border-color-darker: #cdd0d6;
+
+    /* Fill Colors */
+    --el-fill-color: #f0f2f5;
+    --el-fill-color-light: #f5f7fa;
+    --el-fill-color-lighter: #fafafa;
+    --el-fill-color-extra-light: #fafcff;
+    --el-fill-color-dark: #ebedf0;
+    --el-fill-color-darker: #e6e8eb;
+    --el-fill-color-blank: #ffffff;
+
+    /* Box Shadow */
+    --el-box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    --el-box-shadow-light: 0 2px 12px rgba(0, 0, 0, 0.05);
+    --el-box-shadow-lighter: 0 1px 6px rgba(0, 0, 0, 0.03);
+    --el-box-shadow-dark: 0 8px 32px rgba(0, 0, 0, 0.12);
+}

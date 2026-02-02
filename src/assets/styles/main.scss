@@ -1,0 +1,76 @@
+/* Main Styles - Chubao Fingerprint Browser */
+/* 桌面原生化设计系统 */
+
+/* ==================== 导入设计令牌 ==================== */
+@use "./design-tokens.scss";
+
+/* ==================== 导入原生组件库 ==================== */
+@use "./native-components.scss";
+
+/* ==================== 导入 Element Plus 覆盖 ==================== */
+@use "./element-dark.scss";
+@use "./element-overrides.scss";
+
+/* ==================== 导入高级组件库 ==================== */
+@use "./premium-components.scss";
+
+/* ==================== Material Symbols 图标全局样式 ==================== */
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  color: inherit; /* 继承父元素颜色 */
+  vertical-align: middle;
+  line-height: 1;
+}
+
+/* ==================== 自定义滚动条（原型设计风格） ==================== */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #475569;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* ==================== 文本渐变工具类 ==================== */
+.text-gradient {
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-image: linear-gradient(to right, #2563eb, #0ea5e9);
+}
+
+/* ==================== 向后兼容的别名变量 ==================== */
+:root {
+  /* 兼容旧代码的别名 */
+  --color-bg: var(--color-bg-primary);
+  --color-surface: var(--color-bg-secondary);
+  --color-card: var(--color-bg-elevated);
+  --color-border: var(--color-border-default);
+  --color-border-light: var(--color-border-strong);
+
+  --color-primary: var(--color-accent-blue);
+  --color-primary-hover: var(--color-accent-blue-hover);
+  --color-primary-active: var(--color-accent-blue-hover);
+
+  /* 通知栏颜色（保持兼容） */
+  --color-notification-bg: rgba(0, 120, 212, 0.08);
+  --color-notification-border: var(--color-border-interactive);
+  --color-notification-icon: var(--color-accent-blue);
+  --color-notification-text: var(--color-text-secondary);
+
+  --color-tag-bg: var(--color-bg-overlay);
+}

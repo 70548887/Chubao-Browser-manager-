@@ -1,0 +1,46 @@
+// Group IPC Commands - 临时文件，用于添加到 lib.rs
+
+/// 获取所有分组
+#[tauri::command]
+async fn get_groups(state: State<'_, AppState>) -> Result<Vec<modules::group::Group>, String> {
+    let service = state.group_service.lock().await;
+    service.list_groups().await
+}
+
+/// 获取单个分组
+#[tauri::command]
+async fn get_group(id: String, state: State<'_, AppState>) -> Result<modules::group::Group, String> {
+    let service = state.group_service.lock().await;
+    service.get_group(&id).await
+}
+
+/// 创建分组
+#[tauri::command]
+async fn create_group(
+    data: modules::group::CreateGroupDto,
+    state: State<'_, AppState>
+) -> Result<modules::group::Group, String> {
+    let service = state.group_service.lock().await;
+    service.create_group(data).await
+}
+
+/// 更新分组
+#[tauri::command]
+async fn update_group(
+    id: String,
+    data: modules::group::UpdateGroupDto,
+    state: State<'_, AppState>
+) -> Result<modules::group::Group, String> {
+    let service = state.group_service.lock().await;
+    service.update_group(&id, data).await
+}
+
+/// 删除分组
+#[tauri::command]
+async fn delete_group(
+    id: String,
+    state: State<'_, AppState>
+) -> Result<(), String> {
+    let service = state.group_service.lock().await;
+    service.delete_group(&id).await
+}

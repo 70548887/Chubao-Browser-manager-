@@ -1,0 +1,818 @@
+<script setup lang="ts">
+/**
+ * @description 新建/编辑窗口对话框 - 5步骤向导
+ */
+import { ref, computed, watch } from 'vue'
+import StepIndicator from './create-window/StepIndicator.vue'
+import Step1WindowInfo from './create-window/Step1WindowInfo.vue'
+import Step2BasicSettings from './create-window/Step2BasicSettings.vue'
+import Step3FingerprintSettings from './create-window/Step3FingerprintSettings.vue'
+import Step4ProxySettings from './create-window/Step4ProxySettings.vue'
+import Step5Preferences from './create-window/Step5Preferences.vue'
+import { generateRandomFingerprint, type FingerprintConfig, type PlatformType, type BrowserVersionType } from '@/api/fingerprintApi'
+import { useProfileStore } from '@/stores/profile.store'
+
+interface Props {
+  visible: boolean
+  editData?: any  // 编辑模式时传入的窗口数据
+}
+
+const props = defineProps<Props>()
+const emit = defineEmits(['close', 'submit'])
+
+// 获取 Profile Store
+const profileStore = useProfileStore()
+
+// 是否为编辑模式
+const isEditMode = computed(() => !!props.editData)
+
+// 当前步骤 (1-5)
+const currentStep = ref(1)
+
+// 指纹生成状态
+const generatingFingerprint = ref(false)
+const fingerprintError = ref('')
+
+// 表单数据
+const formData = ref({
+  // Step 1 - 窗口信息
+  name: '',
+  groupId: 'default',
+  remark: '',
+  cookies: '',
+  
+  // Step 2 - 基础设置
+  language: 'ip' as 'ip' | 'custom',
+  languageValue: 'en-US',  // 实际语言值
+  uiLanguage: 'ip' as 'ip' | 'custom',
+  timezone: 'ip' as 'ip' | 'custom',
+  timezoneId: 'Asia/Shanghai',  // 实际时区ID
+  geolocationPrompt: 'ask' as 'ask' | 'allow' | 'deny',
+  geolocation: 'ip' as 'ip' | 'custom',
+  sound: true,
+  images: true,
+  video: true,
+  windowSize: 'custom' as 'custom' | 'fullscreen',
+  width: 1200,
+  height: 800,
+  
+  // Step 3 - 高级指纹设置
+  platform: 'windows' as 'windows' | 'macos' | 'android' | 'ios' | 'linux',  // 平台选择
+  navigatorPlatform: 'Win32',  // navigator.platform 值
+  osVersion: 'Windows 10',  // 操作系统版本
+  browserVersion: '146' as '146' | '145' | '144' | '143',  // 内核版本
+  userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36',
+  screenWidth: 1920,
+  screenHeight: 1080,
+  hardwareConcurrency: 4,
+  deviceMemory: 8,
+  canvas: 'noise',
+  webgl: 'noise',
+  webglVendor: 'Google Inc. (NVIDIA)',
+  webglRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce GTX 1080)',
+  webgpu: 'webgl' as 'webgl' | 'real' | 'disable',  // WebGPU 配置
+  audioContext: 'noise' as 'noise' | 'off',
+  webrtc: 'replace',
+  publicIp: '',
+  localIp: '192.168.1.15',
+  
+  // 新增指纹功能
+  ignoreCertErrors: false,  // 忽略HTTPS证书错误
+  fonts: 'system' as 'system' | 'custom',  // 字体指纹
+  customFonts: '',  // 自定义字体列表
+  speechVoices: 'match' as 'match' | 'disable',  // Speech Voices
+  portScanWhitelist: '',  // 端口扫描白名单
+  customPlugins: false,  // 自定义插件指纹
+  cloudflareOptimize: true,  // Cloudflare验证优化
+  
+  // 隐私保护
+  doNotTrack: 'unspecified' as 'enable' | 'disable' | 'unspecified',
+  clientRects: true,
+  mediaDevices: 'real' as 'real' | 'fake' | 'disable',
+  portScanProtection: true,
+  
+  // 设备信息
+  deviceName: 'DESKTOP-W0KJT6V0',
+  macAddress: '64-2B-7A-4D-96-E1',
+  
+  // 性能设置
+  hardwareAcceleration: true,
+  disableSandbox: false,
+  launchArgs: '',
+  
+  // Step 4 - 代理设置
+  proxyProtocol: 'socks5' as 'socks5' | 'http' | 'https' | 'ssh',
+  proxyHost: '',
+  proxyPort: '',
+  proxyUsername: '',
+  proxyPassword: '',
+  enableUdp: true,
+  
+  // Step 5 - 偏好设置（完整版）
+  extensions: [] as string[],
+  
+  // 退出自动清理
+  clearHistoryOnExit: false,
+  clearCookiesOnExit: false,
+  clearCacheOnExit: false,
+  
+  // 启动前清理
+  clearCacheOnStart: false,
+  clearCookiesOnStart: false,
+  clearLocalStorageOnStart: false,
+  
+  // 同步选项
+  syncBookmarks: false,
+  syncHistory: false,
+  syncTabs: false,
+  syncCookies: false,
+  syncExtensions: false,
+  syncPasswords: false,
+  syncIndexedDB: false,
+  syncLocalStorage: false,
+  syncSessionStorage: false,
+  
+  // 云端同步
+  cloudSync: false,
+  cloudSyncExtensions: false,
+  cloudSyncBookmarks: false,
+  
+  // 其他选项
+  randomFingerprintOnStart: false,
+  showPasswordSavePrompt: false,
+  stopOnNetworkError: false,
+  stopOnIpChange: false,
+  stopOnCountryChange: false,
+  openWorkbench: false,
+  ipChangeNotification: false,
+  enableGoogleLogin: false,
+  
+  // 网址访问控制
+  urlBlacklist: '',
+  urlWhitelist: '',
+  
+  // 兼容旧字段（映射到新字段）
+  startupPage: 'blank' as 'blank' | 'url',
+  startupUrl: 'https://www.google.com',
+  clearHistory: false,
+  clearCookies: true,
+  clearCache: false,
+})
+
+// 监听编辑数据变化，回显到表单
+watch(() => props.editData, (newData) => {
+  if (newData) {
+    console.log('📝 编辑模式，加载数据:', newData)
+    
+    // 基本信息
+    formData.value.name = newData.name || ''
+    formData.value.groupId = newData.group || 'default'
+    formData.value.remark = newData.remark || ''
+    
+    // 解析指纹数据
+    const fp = newData.fingerprint || {}
+    
+    // 平台和系统
+    formData.value.platform = fp.platform || fp.navigator?.platform || 'windows'
+    formData.value.navigatorPlatform = fp.navigator_platform || fp.navigator?.navigator_platform || 'Win32'
+    formData.value.osVersion = fp.os_version || 'Windows 10'
+    formData.value.browserVersion = fp.browser_version || '146'
+    formData.value.userAgent = fp.user_agent || fp.navigator?.user_agent || ''
+    
+    // 硬件配置
+    formData.value.screenWidth = fp.screen_width || fp.screen?.width || 1920
+    formData.value.screenHeight = fp.screen_height || fp.screen?.height || 1080
+    formData.value.hardwareConcurrency = fp.hardware_concurrency || fp.navigator?.hardware_concurrency || 4
+    formData.value.deviceMemory = fp.device_memory || fp.navigator?.device_memory || 8
+    
+    // WebGL
+    formData.value.webglVendor = fp.webgl_vendor || fp.webgl?.vendor || 'Google Inc. (NVIDIA)'
+    formData.value.webglRenderer = fp.webgl_renderer || fp.webgl?.renderer || ''
+    formData.value.webgpu = fp.webgpu || 'webgl'
+    formData.value.canvas = fp.canvas_noise ? 'noise' : 'off'
+    formData.value.webgl = fp.webgl_noise ? 'noise' : 'off'
+    formData.value.audioContext = fp.audio_noise ? 'noise' : 'off'
+    
+    // WebRTC
+    formData.value.webrtc = fp.webrtc || 'replace'
+    formData.value.publicIp = fp.public_ip || ''
+    formData.value.localIp = fp.local_ip || '192.168.1.15'
+    
+    // 隐私保护
+    formData.value.doNotTrack = fp.do_not_track || 'unspecified'
+    formData.value.clientRects = fp.client_rects !== false
+    formData.value.mediaDevices = fp.media_devices || 'real'
+    formData.value.portScanProtection = fp.port_scan_protection !== false
+    formData.value.portScanWhitelist = fp.port_scan_whitelist || ''
+    formData.value.fonts = fp.fonts || 'system'
+    formData.value.customFonts = fp.custom_fonts || ''
+    formData.value.speechVoices = fp.speech_voices || 'match'
+    formData.value.ignoreCertErrors = fp.ignore_cert_errors || false
+    formData.value.customPlugins = fp.custom_plugins || false
+    formData.value.cloudflareOptimize = fp.cloudflare_optimize !== false
+    
+    // 设备信息
+    formData.value.deviceName = fp.device_name || 'DESKTOP-' + Math.random().toString(36).substring(2, 10).toUpperCase()
+    formData.value.macAddress = fp.mac_address || ''
+    
+    // 性能设置
+    formData.value.hardwareAcceleration = fp.hardware_acceleration !== false
+    formData.value.disableSandbox = fp.disable_sandbox || false
+    formData.value.launchArgs = fp.launch_args || ''
+    
+    // 代理配置
+    const proxy = newData.proxy
+    if (proxy) {
+      formData.value.proxyProtocol = proxy.type?.toLowerCase() || 'socks5'
+      formData.value.proxyHost = proxy.host || ''
+      formData.value.proxyPort = proxy.port?.toString() || ''
+      formData.value.proxyUsername = proxy.username || ''
+      formData.value.proxyPassword = proxy.password || ''
+    }
+    
+    // 偏好设置
+    const prefs = newData.preferences || {}
+    
+    // 扩展
+    formData.value.extensions = prefs.extensions || []
+    
+    // 退出自动清理
+    formData.value.clearHistoryOnExit = prefs.clearHistoryOnExit || false
+    formData.value.clearCookiesOnExit = prefs.clearCookiesOnExit || false
+    formData.value.clearCacheOnExit = prefs.clearCacheOnExit || false
+    
+    // 启动前清理
+    formData.value.clearCacheOnStart = prefs.clearCacheOnStart || false
+    formData.value.clearCookiesOnStart = prefs.clearCookiesOnStart || false
+    formData.value.clearLocalStorageOnStart = prefs.clearLocalStorageOnStart || false
+    
+    // 同步选项
+    formData.value.syncBookmarks = prefs.syncBookmarks || false
+    formData.value.syncHistory = prefs.syncHistory || false
+    formData.value.syncTabs = prefs.syncTabs || false
+    formData.value.syncCookies = prefs.syncCookies || false
+    formData.value.syncExtensions = prefs.syncExtensions || false
+    formData.value.syncPasswords = prefs.syncPasswords || false
+    formData.value.syncIndexedDB = prefs.syncIndexedDB || false
+    formData.value.syncLocalStorage = prefs.syncLocalStorage || false
+    formData.value.syncSessionStorage = prefs.syncSessionStorage || false
+    
+    // 云端同步
+    formData.value.cloudSync = prefs.cloudSync || false
+    formData.value.cloudSyncExtensions = prefs.cloudSyncExtensions || false
+    formData.value.cloudSyncBookmarks = prefs.cloudSyncBookmarks || false
+    
+    // 其他选项
+    formData.value.randomFingerprintOnStart = prefs.randomFingerprintOnStart || false
+    formData.value.showPasswordSavePrompt = prefs.showPasswordSavePrompt || false
+    formData.value.stopOnNetworkError = prefs.stopOnNetworkError || false
+    formData.value.stopOnIpChange = prefs.stopOnIpChange || false
+    formData.value.stopOnCountryChange = prefs.stopOnCountryChange || false
+    formData.value.openWorkbench = prefs.openWorkbench || false
+    formData.value.ipChangeNotification = prefs.ipChangeNotification || false
+    formData.value.enableGoogleLogin = prefs.enableGoogleLogin || false
+    
+    // 网址访问控制
+    formData.value.urlBlacklist = prefs.urlBlacklist || ''
+    formData.value.urlWhitelist = prefs.urlWhitelist || ''
+    
+    console.log('✅ 表单数据已加载')
+  }
+}, { immediate: true })
+
+// 打开弹窗时重置步骤
+watch(() => props.visible, (visible) => {
+  if (visible) {
+    currentStep.value = 1
+    if (!props.editData) {
+      // 创建模式，重置表单
+      resetFormData()
+    }
+  }
+})
+
+// 重置表单数据
+const resetFormData = () => {
+  formData.value = {
+    name: '',
+    groupId: 'default',
+    remark: '',
+    cookies: '',
+    language: 'ip',
+    languageValue: 'en-US',
+    uiLanguage: 'ip',
+    timezone: 'ip',
+    timezoneId: 'Asia/Shanghai',
+    geolocationPrompt: 'ask',
+    geolocation: 'ip',
+    sound: true,
+    images: true,
+    video: true,
+    windowSize: 'custom',
+    width: 1200,
+    height: 800,
+    platform: 'windows',
+    navigatorPlatform: 'Win32',
+    osVersion: 'Windows 10',
+    browserVersion: '146',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36',
+    screenWidth: 1920,
+    screenHeight: 1080,
+    hardwareConcurrency: 4,
+    deviceMemory: 8,
+    canvas: 'noise',
+    webgl: 'noise',
+    webglVendor: 'Google Inc. (NVIDIA)',
+    webglRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce GTX 1080)',
+    webgpu: 'webgl',
+    audioContext: 'noise',
+    webrtc: 'replace',
+    publicIp: '',
+    localIp: '192.168.1.15',
+    ignoreCertErrors: false,
+    fonts: 'system',
+    customFonts: '',
+    speechVoices: 'match',
+    portScanWhitelist: '',
+    customPlugins: false,
+    cloudflareOptimize: true,
+    doNotTrack: 'unspecified',
+    clientRects: true,
+    mediaDevices: 'real',
+    portScanProtection: true,
+    deviceName: 'DESKTOP-W0KJT6V0',
+    macAddress: '64-2B-7A-4D-96-E1',
+    hardwareAcceleration: true,
+    disableSandbox: false,
+    launchArgs: '',
+    proxyProtocol: 'socks5',
+    proxyHost: '',
+    proxyPort: '',
+    proxyUsername: '',
+    proxyPassword: '',
+    enableUdp: true,
+    // Step 5 - 偏好设置（完整版）
+    extensions: [],
+    
+    // 退出自动清理
+    clearHistoryOnExit: false,
+    clearCookiesOnExit: false,
+    clearCacheOnExit: false,
+    
+    // 启动前清理
+    clearCacheOnStart: false,
+    clearCookiesOnStart: false,
+    clearLocalStorageOnStart: false,
+    
+    // 同步选项
+    syncBookmarks: false,
+    syncHistory: false,
+    syncTabs: false,
+    syncCookies: false,
+    syncExtensions: false,
+    syncPasswords: false,
+    syncIndexedDB: false,
+    syncLocalStorage: false,
+    syncSessionStorage: false,
+    
+    // 云端同步
+    cloudSync: false,
+    cloudSyncExtensions: false,
+    cloudSyncBookmarks: false,
+    
+    // 其他选项
+    randomFingerprintOnStart: false,
+    showPasswordSavePrompt: false,
+    stopOnNetworkError: false,
+    stopOnIpChange: false,
+    stopOnCountryChange: false,
+    openWorkbench: false,
+    ipChangeNotification: false,
+    enableGoogleLogin: false,
+    
+    // 网址访问控制
+    urlBlacklist: '',
+    urlWhitelist: '',
+    
+    // 兼容旧字段
+    startupPage: 'blank',
+    startupUrl: 'https://www.google.com',
+    clearHistory: false,
+    clearCookies: true,
+    clearCache: false,
+  }
+}
+
+// 步骤配置
+const steps = [
+  { id: 1, label: '窗口信息' },
+  { id: 2, label: '基础设置' },
+  { id: 3, label: '高级指纹设置' },
+  { id: 4, label: '代理设置' },
+  { id: 5, label: '偏好设置' }
+]
+
+// 是否是最后一步
+const isLastStep = computed(() => currentStep.value === 5)
+const isFirstStep = computed(() => currentStep.value === 1)
+
+// 下一步
+const handleNext = () => {
+  if (currentStep.value < 5) {
+    currentStep.value++
+  }
+}
+
+// 上一步
+const handlePrev = () => {
+  if (currentStep.value > 1) {
+    currentStep.value--
+  }
+}
+
+// 取消
+const handleCancel = () => {
+  emit('close')
+}
+
+// 完成创建
+const handleSubmit = async () => {
+  try {
+    generatingFingerprint.value = true
+    fingerprintError.value = ''
+    
+    // 生成唯一ID（用于指纹生成的确定性）
+    const profileId = crypto.randomUUID()
+    
+    // 获取平台和内核版本参数（从高级指纹设置中获取）
+    const platform = (formData.value.platform || 'windows') as PlatformType
+    const browserVersion = (formData.value.browserVersion || '146') as BrowserVersionType
+    
+    // ⭐ 调用后端指纹生成API（根据平台和内核版本生成）
+    console.log(`正在生成设备指纹 [平台: ${platform}, 内核: Chrome ${browserVersion}]...`)
+    const fingerprint: FingerprintConfig = await generateRandomFingerprint(profileId, platform, browserVersion)
+    console.log('指纹生成成功:', fingerprint)
+    
+    // 处理窗口名称：如果为空，自动生成"未命名+序号"
+    let windowName = formData.value.name.trim()
+    if (!windowName) {
+      // 计算序号：统计现有"未命名"开头的窗口数量
+      const unnamedProfiles = profileStore.profiles.filter(p => 
+        p.name.startsWith('未命名')
+      )
+      const nextNumber = unnamedProfiles.length + 1
+      windowName = `未命名${nextNumber}`
+      console.log(`窗口名称为空，自动生成: ${windowName}`)
+    }
+    
+    // 构建偏好设置对象
+    const preferences = {
+      extensions: formData.value.extensions || [],
+      
+      // 退出自动清理
+      clearHistoryOnExit: formData.value.clearHistoryOnExit,
+      clearCookiesOnExit: formData.value.clearCookiesOnExit,
+      clearCacheOnExit: formData.value.clearCacheOnExit,
+      
+      // 启动前清理
+      clearCacheOnStart: formData.value.clearCacheOnStart,
+      clearCookiesOnStart: formData.value.clearCookiesOnStart,
+      clearLocalStorageOnStart: formData.value.clearLocalStorageOnStart,
+      
+      // 同步选项
+      syncBookmarks: formData.value.syncBookmarks,
+      syncHistory: formData.value.syncHistory,
+      syncTabs: formData.value.syncTabs,
+      syncCookies: formData.value.syncCookies,
+      syncExtensions: formData.value.syncExtensions,
+      syncPasswords: formData.value.syncPasswords,
+      syncIndexedDB: formData.value.syncIndexedDB,
+      syncLocalStorage: formData.value.syncLocalStorage,
+      syncSessionStorage: formData.value.syncSessionStorage,
+      
+      // 云端同步
+      cloudSync: formData.value.cloudSync,
+      cloudSyncExtensions: formData.value.cloudSyncExtensions,
+      cloudSyncBookmarks: formData.value.cloudSyncBookmarks,
+      
+      // 其他选项
+      randomFingerprintOnStart: formData.value.randomFingerprintOnStart,
+      showPasswordSavePrompt: formData.value.showPasswordSavePrompt,
+      stopOnNetworkError: formData.value.stopOnNetworkError,
+      stopOnIpChange: formData.value.stopOnIpChange,
+      stopOnCountryChange: formData.value.stopOnCountryChange,
+      openWorkbench: formData.value.openWorkbench,
+      ipChangeNotification: formData.value.ipChangeNotification,
+      enableGoogleLogin: formData.value.enableGoogleLogin,
+      
+      // 网址访问控制
+      urlBlacklist: formData.value.urlBlacklist,
+      urlWhitelist: formData.value.urlWhitelist,
+    }
+    
+    // 将生成的指纹数据和其他数据合并到提交对象
+    const submitData = {
+      ...formData.value,
+      name: windowName,  // 使用处理后的窗口名称
+      fingerprint: fingerprint,  // ⭐ 传递完整的指纹配置给后端
+      preferences: preferences,  // 添加偏好设置
+    }
+    
+    console.log('提交表单数据:', submitData)
+    emit('submit', submitData)
+    emit('close')
+    
+  } catch (error) {
+    console.error('指纹生成失败:', error)
+    fingerprintError.value = `指纹生成失败: ${error}`
+    alert(`创建失败：${error}`)
+  } finally {
+    generatingFingerprint.value = false
+  }
+}
+
+// 关闭对话框
+const handleClose = () => {
+  emit('close')
+}
+
+// 重置表单
+watch(() => props.visible, (val) => {
+  if (val) {
+    currentStep.value = 1
+  }
+})
+
+</script>
+
+<template>
+  <Teleport to="body">
+    <Transition name="dialog-fade">
+      <div v-if="visible" class="dialog-overlay" @click.self="handleClose">
+        <div class="dialog-container">
+          <!-- 头部 -->
+          <div class="dialog-header">
+            <h2 class="dialog-title">{{ isEditMode ? '编辑窗口' : '新建窗口' }}</h2>
+            <button class="close-btn" @click="handleClose">
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </div>
+          
+          <!-- 步骤条 -->
+          <div class="step-area">
+            <StepIndicator :steps="steps" :current="currentStep" @select="currentStep = $event" />
+          </div>
+          
+          <!-- 内容区域 -->
+          <div class="dialog-content">
+            <Step1WindowInfo v-if="currentStep === 1" v-model="formData" />
+            <Step2BasicSettings v-else-if="currentStep === 2" v-model="formData" />
+            <Step3FingerprintSettings v-else-if="currentStep === 3" v-model="formData" />
+            <Step4ProxySettings v-else-if="currentStep === 4" v-model="formData" />
+            <Step5Preferences v-else-if="currentStep === 5" v-model="formData" />
+          </div>
+          
+          <!-- 底部按钮 -->
+          <div class="dialog-footer">
+            <button class="btn btn-cancel" @click="handleCancel">
+              取消
+            </button>
+            <button v-if="!isFirstStep" class="btn btn-prev" @click="handlePrev">
+              <span class="material-symbols-outlined">chevron_left</span>
+              上一步
+            </button>
+            <button v-if="!isLastStep" class="btn btn-next" @click="handleNext">
+              下一步
+              <span class="material-symbols-outlined">chevron_right</span>
+            </button>
+            <button v-else class="btn btn-submit" @click="handleSubmit" :disabled="generatingFingerprint">
+              <span v-if="generatingFingerprint" class="material-symbols-outlined spinning">refresh</span>
+              <span v-else class="material-symbols-outlined">check_circle</span>
+              {{ generatingFingerprint ? '正在生成指纹...' : (isEditMode ? '保存更改' : '完成并创建') }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
+</template>
+
+<style scoped lang="scss">
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(4px);
+  padding: 16px;
+}
+
+.dialog-container {
+  width: 100%;
+  max-width: 800px;
+  height: 85vh;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--color-border-default);
+  
+  .dark & {
+    background: var(--color-bg-elevated);
+    border-color: var(--color-border-dark);
+  }
+}
+
+.dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--color-border-default);
+  
+  .dialog-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    margin: 0;
+  }
+  
+  .close-btn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: var(--color-text-tertiary);
+    cursor: pointer;
+    transition: all 0.2s;
+    
+    &:hover {
+      background: var(--color-hover-bg);
+      color: var(--color-text-primary);
+    }
+    
+    .material-symbols-outlined {
+      font-size: 20px;
+    }
+  }
+}
+
+.step-area {
+  padding: 24px 32px;
+  border-bottom: 1px solid var(--color-border-default);
+  background: rgba(248, 250, 252, 0.5);
+  
+  .dark & {
+    background: rgba(30, 41, 59, 0.3);
+  }
+}
+
+.dialog-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 32px;
+  
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  &::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+    
+    &:hover {
+      background: #94a3b8;
+    }
+  }
+}
+
+.dialog-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--color-border-default);
+  background: rgba(248, 250, 252, 0.5);
+  
+  .dark & {
+    background: rgba(30, 41, 59, 0.3);
+  }
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+  
+  .material-symbols-outlined {
+    font-size: 18px;
+  }
+}
+
+.btn-cancel {
+  background: white;
+  border-color: var(--color-border-default);
+  color: var(--color-text-secondary);
+  
+  &:hover {
+    background: var(--color-hover-bg);
+    color: var(--color-text-primary);
+  }
+  
+  .dark & {
+    background: var(--color-bg-elevated);
+  }
+}
+
+.btn-prev {
+  background: white;
+  border-color: var(--color-border-default);
+  color: var(--color-text-secondary);
+  
+  &:hover {
+    background: var(--color-hover-bg);
+    color: var(--color-text-primary);
+  }
+  
+  .dark & {
+    background: var(--color-bg-elevated);
+  }
+}
+
+.btn-next {
+  background: #2563eb;
+  color: white;
+  
+  &:hover {
+    background: #1d4ed8;
+  }
+}
+
+.btn-submit {
+  background: linear-gradient(to right, #2563eb, #3b82f6);
+  color: white;
+  padding: 8px 24px;
+  box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3);
+  
+  &:hover {
+    background: linear-gradient(to right, #1d4ed8, #2563eb);
+    transform: translateY(-1px);
+    box-shadow: 0 20px 25px -5px rgba(37, 99, 235, 0.3);
+  }
+}
+
+// 动画
+.dialog-fade-enter-active,
+.dialog-fade-leave-active {
+  transition: all 0.3s ease;
+  
+  .dialog-container {
+    transition: all 0.3s ease;
+  }
+}
+
+.dialog-fade-enter-from,
+.dialog-fade-leave-to {
+  opacity: 0;
+  
+  .dialog-container {
+    transform: scale(0.95) translateY(20px);
+    opacity: 0;
+  }
+}
+
+// 旋转动画
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+</style>

@@ -1,0 +1,68 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT \n                g.id as \"id!: String\",\n                g.name as \"name!: String\",\n                g.sort as \"sort!: i32\",\n                g.permission as \"permission!: String\",\n                g.remark as \"remark: String\",\n                g.icon as \"icon: String\",\n                g.created_at as \"created_at!: String\",\n                g.updated_at as \"updated_at!: String\",\n                COUNT(p.id) as \"profile_count!: i32\"\n            FROM groups g\n            LEFT JOIN profiles p ON p.group_id = g.id\n            WHERE g.id = ?\n            GROUP BY g.id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!: String",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "name!: String",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "sort!: i32",
+        "ordinal": 2,
+        "type_info": "Integer"
+      },
+      {
+        "name": "permission!: String",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "remark: String",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "icon: String",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at!: String",
+        "ordinal": 6,
+        "type_info": "Datetime"
+      },
+      {
+        "name": "updated_at!: String",
+        "ordinal": 7,
+        "type_info": "Datetime"
+      },
+      {
+        "name": "profile_count!: i32",
+        "ordinal": 8,
+        "type_info": "Null"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "0785f7c508e3150924c87633f53398a882e2e9d5dc60d07e1b6ecca7803455ef"
+}

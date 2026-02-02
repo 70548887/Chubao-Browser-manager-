@@ -1,0 +1,230 @@
+/**
+ * @file animations.scss
+ * @description 统一动画系统定义
+ * @author DeepAgent
+ */
+
+// ==================== 缓动函数 (Easing Functions) ====================
+:root {
+    // Apple 风格缓动
+    --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+    /* 爆发式结束 */
+    --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+    /* 平滑减速 */
+    --ease-in-out-cubic: cubic-bezier(0.65, 0, 0.35, 1);
+    /* 对称缓动 */
+    --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+    /* 平滑过渡 */
+
+    // 动画时长（微软 Fluent 标准）
+    --duration-instant: 100ms;
+    /* 即时反馈（按钮点击） */
+    --duration-fast: 200ms;
+    /* 快速动画（hover） */
+    --duration-normal: 300ms;
+    /* 正常动画（展开/收起） */
+    --duration-slow: 500ms;
+    /* 慢动画（页面切换） */
+}
+
+// ==================== 淡入淡出动画 ====================
+
+/* 淡入淡出 (用于路由切换) */
+.fade-enter-active,
+.fade-leave-active {
+    transition: opacity var(--duration-normal) var(--ease-out-quart);
+}
+
+.fade-enter-from,
+.fade-leave-to {
+    opacity: 0;
+}
+
+.fade-enter-to,
+.fade-leave-from {
+    opacity: 1;
+}
+
+// ==================== 滑动动画 ====================
+
+/* 从右侧滑入 (抽屉) */
+.slide-right-enter-active,
+.slide-right-leave-active {
+    transition: transform var(--duration-normal) var(--ease-out-quart);
+}
+
+.slide-right-enter-from {
+    transform: translateX(100%);
+}
+
+.slide-right-leave-to {
+    transform: translateX(100%);
+}
+
+/* 从上方滑入 (通知) */
+.slide-down-enter-active,
+.slide-down-leave-active {
+    transition: all var(--duration-fast) var(--ease-smooth);
+}
+
+.slide-down-enter-from {
+    transform: translateY(-100%);
+    opacity: 0;
+}
+
+.slide-down-leave-to {
+    transform: translateY(-100%);
+    opacity: 0;
+}
+
+// ==================== 缩放动画 ====================
+
+/* 缩放淡入 (对话框) */
+.scale-enter-active,
+.scale-leave-active {
+    transition: all var(--duration-fast) var(--ease-out-quart);
+}
+
+.scale-enter-from,
+.scale-leave-to {
+    transform: scale(0.95);
+    opacity: 0;
+}
+
+.scale-enter-to,
+.scale-leave-from {
+    transform: scale(1);
+    opacity: 1;
+}
+
+// ==================== 列表动画 ====================
+
+/* 列表项进入/离开 */
+.list-enter-active,
+.list-leave-active {
+    transition: all var(--duration-normal) var(--ease-out-quart);
+}
+
+.list-enter-from {
+    opacity: 0;
+    transform: translateY(-10px);
+}
+
+.list-leave-to {
+    opacity: 0;
+    transform: translateY(10px);
+}
+
+.list-move {
+    transition: transform var(--duration-normal) var(--ease-out-quart);
+}
+
+// ==================== 加载动画 ====================
+
+/* 骨架屏动画 */
+@keyframes skeleton-loading {
+    0% {
+        background-position: -200px 0;
+    }
+
+    100% {
+        background-position: calc(200px + 100%) 0;
+    }
+}
+
+.skeleton {
+    animation: skeleton-loading 1.5s ease-in-out infinite;
+    background: linear-gradient(90deg,
+            var(--color-bg-secondary) 0%,
+            var(--color-bg-elevated) 50%,
+            var(--color-bg-secondary) 100%);
+    background-size: 200px 100%;
+}
+
+/* 旋转加载 */
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.spin {
+    animation: spin 1s linear infinite;
+}
+
+/* 脉冲动画 (点) */
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
+}
+
+.pulse {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+// ==================== 微交互动画 ====================
+
+/* 按钮悬浮提升 */
+.hover-lift {
+    transition: transform var(--duration-fast) var(--ease-out-quart),
+        box-shadow var(--duration-fast) var(--ease-out-quart);
+
+    &:hover {
+        transform: translateY(-2px);
+    }
+
+    &:active {
+        transform: translateY(0);
+        transition-duration: var(--duration-instant);
+    }
+}
+
+/* 悬浮放大 */
+.hover-scale {
+    transition: transform var(--duration-fast) var(--ease-out-quart);
+
+    &:hover {
+        transform: scale(1.05);
+    }
+
+    &:active {
+        transform: scale(0.98);
+    }
+}
+
+/* 悬浮发光 */
+.hover-glow {
+    transition: box-shadow var(--duration-fast) var(--ease-smooth);
+
+    &:hover {
+        box-shadow: 0 0 20px rgba(37, 99, 235, 0.3);
+    }
+}
+
+// ==================== 工具类 ====================
+
+/* 平滑过渡（通用） */
+.transition-colors {
+    transition: color var(--duration-fast) var(--ease-smooth),
+        background-color var(--duration-fast) var(--ease-smooth),
+        border-color var(--duration-fast) var(--ease-smooth);
+}
+
+.transition-transform {
+    transition: transform var(--duration-fast) var(--ease-out-quart);
+}
+
+.transition-all {
+    transition: all var(--duration-fast) var(--ease-smooth);
+}
