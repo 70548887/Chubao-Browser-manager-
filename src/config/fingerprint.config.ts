@@ -42,6 +42,37 @@ export const FINGERPRINT_WHITELIST = [
   'brand',
   'version',
   'seed',
+  
+  // 性能设置（用户可配置）
+  'hardwareAcceleration',
+  'disableSandbox',
+  'launchArgs',
+  
+  // 隐私保护
+  'ignoreCertErrors',
+  'customFonts',
+  'speechVoices',
+  'portScanWhitelist',
+  'customPlugins',
+  'cloudflareOptimize',
+  'portScanProtection',
+  'deviceName',
+  'macAddress',
+  
+  // 字体配置
+  'fontsMode',
+  'fontsList',
+  
+  // Variations 配置
+  'variationsEnabled',
+  'variationsSeedId',
+  
+  // 地理位置配置
+  'geolocationMode',
+  'geolocationLatitude',
+  'geolocationLongitude',
+  'geolocationAccuracy',
+  'geolocationPrompt',
 ] as const
 
 /**
@@ -49,8 +80,7 @@ export const FINGERPRINT_WHITELIST = [
  * 这是"更安全"的关键，出现则丢弃/拒绝
  */
 export const FINGERPRINT_BLACKLIST = [
-  // 命令/参数类
-  'launchArgs',
+  // 命令/参数类（危险的通用参数）
   'args',
   'cmdline',
   

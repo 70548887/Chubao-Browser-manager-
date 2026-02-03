@@ -4,7 +4,7 @@
  */
 
 import { ref, reactive, computed, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { Message } from '@/utils/message'
 import { useGroupStore } from '@/stores/groupStore'
 import { useProfileStore } from '@/stores/profile.store'
 import { filterFingerprintWhitelist, FINGERPRINT_SCHEMA_VERSION } from '@/config/fingerprint.config'
@@ -25,6 +25,8 @@ export interface CreateProfileFormData {
   timezone: string
   geolocationPrompt: string
   geolocation: string
+  geolocationLatitude: number | null
+  geolocationLongitude: number | null
   sound: boolean
   images: boolean
   video: boolean
@@ -54,6 +56,15 @@ export interface CreateProfileFormData {
   hardwareAcceleration: boolean
   disableSandbox: boolean
   launchArgs: string
+  
+  // 字体配置
+  fontsMode: 'subset' | 'real' | 'custom' | 'random'
+  fontsList: string[]  // 选中的字体列表
+  customFonts: string  // 自定义字体（逗号分隔）
+  
+  // Variations 配置（内核实验分组）
+  variationsEnabled: boolean
+  variationsSeedId: string  // 自动基于 Profile ID 生成
   
   // 第四步：代理设置
   checkIpOnStart: boolean
@@ -174,6 +185,8 @@ export function useCreateProfile(emit: {
     timezone: 'auto',
     geolocationPrompt: 'ask',
     geolocation: 'auto',
+    geolocationLatitude: null,
+    geolocationLongitude: null,
     sound: true,
     images: true,
     video: true,
@@ -203,6 +216,19 @@ export function useCreateProfile(emit: {
     hardwareAcceleration: false,
     disableSandbox: false,
     launchArgs: '',
+    
+    // 字体配置
+    fontsMode: 'subset',
+    fontsList: [
+      'Arial', 'Arial Black', 'Calibri', 'Cambria', 'Courier New',
+      'Georgia', 'Helvetica', 'Impact', 'Microsoft YaHei', 'SimSun',
+      'SimHei', 'Tahoma', 'Times New Roman', 'Trebuchet MS', 'Verdana'
+    ],
+    customFonts: '',
+    
+    // Variations 配置
+    variationsEnabled: true,
+    variationsSeedId: '',  // 自动生成
     
     // 第四步：代理设置
     checkIpOnStart: false,
@@ -268,7 +294,7 @@ export function useCreateProfile(emit: {
 
   const handleNext = () => {
     if (currentStep.value === 1 && !formData.name) {
-      ElMessage.warning('请输入窗口名称')
+      Message.warning('请输入窗口名称')
       return
     }
     
@@ -295,9 +321,37 @@ export function useCreateProfile(emit: {
         webglNoise: formData.canvas === 'noise',
         audioNoise: formData.audioContext === 'noise',
         webrtc: formData.webrtc,
+        webrtcPublicIp: formData.webrtcPublicIp || undefined,
+        webrtcLocalIp: formData.webrtcLocalIp || undefined,
         webglVendor: formData.webglVendor,
         webglRenderer: formData.webglRenderer,
         schemaVersion: FINGERPRINT_SCHEMA_VERSION,
+        
+        // 字体配置
+        fontsMode: formData.fontsMode,
+        fontsList: formData.fontsMode === 'custom' || formData.fontsMode === 'random' 
+          ? formData.fontsList 
+          : undefined,
+        customFonts: formData.customFonts || undefined,
+        
+        // Variations 配置
+        variationsEnabled: formData.variationsEnabled,
+        variationsSeedId: formData.variationsSeedId || undefined,
+        
+        // 地理位置配置
+        geolocationMode: formData.geolocation,  // 'auto' | 'ip' | 'custom'
+        geolocationLatitude: (formData.geolocation === 'custom' || formData.geolocation === 'ip') 
+          ? formData.geolocationLatitude : undefined,
+        geolocationLongitude: (formData.geolocation === 'custom' || formData.geolocation === 'ip') 
+          ? formData.geolocationLongitude : undefined,
+        geolocationPrompt: formData.geolocationPrompt,
+        
+        // 其他配置
+        deviceName: formData.deviceName,
+        macAddress: formData.macAddress,
+        hardwareAcceleration: formData.hardwareAcceleration,
+        disableSandbox: formData.disableSandbox,
+        launchArgs: formData.launchArgs || undefined,
       }
       
       // 过滤指纹字段（安全保障）
@@ -314,13 +368,13 @@ export function useCreateProfile(emit: {
       if (newProfile) {
         emit('created', newProfile)
         emit('update:visible', false)
-        ElMessage.success('创建成功')
+        Message.success('创建成功')
         
         // 重置
         currentStep.value = 1
       }
     } catch (error) {
-      ElMessage.error('创建失败')
+      Message.error('创建失败')
       console.error('Failed to create profile:', error)
     }
   }

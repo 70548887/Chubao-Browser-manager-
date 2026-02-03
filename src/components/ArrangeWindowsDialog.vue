@@ -5,7 +5,7 @@
  */
 
 import { ref, computed, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { Message } from '@/utils/message'
 import { invoke } from '@tauri-apps/api/core'
 
 interface Monitor {
@@ -105,19 +105,19 @@ const fetchMonitors = async () => {
 const autoArrange = () => {
   const m = currentMonitor.value
   if (!m) return
-  
+
   const count = props.runningCount
   if (count === 0) return
-  
+
   // 计算最佳列数
   const cols = Math.ceil(Math.sqrt(count))
   const rows = Math.ceil(count / cols)
-  
+
   // 计算窗口大小（留一点边距）
   const margin = 10
   const availableWidth = m.width - margin * 2
   const availableHeight = m.height - margin * 2
-  
+
   config.value.columns = cols
   config.value.windowWidth = Math.floor(availableWidth / cols)
   config.value.windowHeight = Math.floor(availableHeight / rows)
@@ -130,20 +130,20 @@ const autoArrange = () => {
 // 开始排列
 const handleArrange = async () => {
   if (props.runningCount === 0) {
-    ElMessage.warning('没有运行中的窗口')
+    Message.warning('没有运行中的窗口')
     return
   }
-  
+
   // 验证窗口大小
   if (config.value.windowWidth < 120) {
-    ElMessage.warning('窗口宽度不能小于 120px')
+    Message.warning('窗口宽度不能小于 120px')
     return
   }
   if (config.value.windowHeight < 40) {
-    ElMessage.warning('窗口高度不能小于 40px')
+    Message.warning('窗口高度不能小于 40px')
     return
   }
-  
+
   isLoading.value = true
   try {
     await invoke('arrange_windows_advanced', {
@@ -160,11 +160,11 @@ const handleArrange = async () => {
         mode: arrangeMode.value
       }
     })
-    ElMessage.success(`已排列 ${props.runningCount} 个窗口`)
+    Message.success(`已排列 ${props.runningCount} 个窗口`)
     emit('arranged')
     handleClose()
   } catch (e: any) {
-    ElMessage.error(e.message || '排列窗口失败')
+    Message.error(e.message || '排列窗口失败')
   } finally {
     isLoading.value = false
   }
@@ -180,25 +180,14 @@ onMounted(() => {
 </script>
 
 <template>
-  <el-dialog
-    :model-value="visible"
-    title="重新排列窗口及调整大小"
-    width="560px"
-    :close-on-click-modal="false"
-    @update:model-value="$emit('update:visible', $event)"
-  >
+  <el-dialog :model-value="visible" title="重新排列窗口及调整大小" width="560px" :close-on-click-modal="false"
+    @update:model-value="$emit('update:visible', $event)">
     <!-- 排列模式切换 -->
     <div class="mode-tabs">
-      <button 
-        :class="['mode-tab', { active: arrangeMode === 'grid' }]"
-        @click="arrangeMode = 'grid'"
-      >
+      <button :class="['mode-tab', { active: arrangeMode === 'grid' }]" @click="arrangeMode = 'grid'">
         宫格排列
       </button>
-      <button 
-        :class="['mode-tab', { active: arrangeMode === 'diagonal' }]"
-        @click="arrangeMode = 'diagonal'"
-      >
+      <button :class="['mode-tab', { active: arrangeMode === 'diagonal' }]" @click="arrangeMode = 'diagonal'">
         对角线排列
       </button>
     </div>
@@ -209,12 +198,7 @@ onMounted(() => {
         <label class="form-label">显示器</label>
         <div class="form-content">
           <el-select v-model="selectedMonitor" style="width: 100%">
-            <el-option
-              v-for="opt in monitorOptions"
-              :key="opt.value"
-              :label="opt.label"
-              :value="opt.value"
-            />
+            <el-option v-for="opt in monitorOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
           </el-select>
         </div>
       </div>
@@ -225,23 +209,11 @@ onMounted(() => {
         <div class="form-content form-inline">
           <div class="inline-item">
             <span class="inline-label">X:</span>
-            <el-input-number 
-              v-model="config.startX" 
-              :min="0" 
-              :max="9999"
-              :controls="false"
-              style="width: 100px"
-            />
+            <el-input-number v-model="config.startX" :min="0" :max="9999" :controls="false" style="width: 100px" />
           </div>
           <div class="inline-item">
             <span class="inline-label">Y:</span>
-            <el-input-number 
-              v-model="config.startY" 
-              :min="0" 
-              :max="9999"
-              :controls="false"
-              style="width: 100px"
-            />
+            <el-input-number v-model="config.startY" :min="0" :max="9999" :controls="false" style="width: 100px" />
           </div>
         </div>
       </div>
@@ -252,33 +224,17 @@ onMounted(() => {
         <div class="form-content form-inline">
           <div class="inline-item">
             <span class="inline-label">宽:</span>
-            <el-input-number 
-              v-model="config.windowWidth" 
-              :min="120" 
-              :max="9999"
-              :controls="false"
-              style="width: 80px"
-            />
+            <el-input-number v-model="config.windowWidth" :min="120" :max="9999" :controls="false"
+              style="width: 80px" />
           </div>
           <div class="inline-item">
             <span class="inline-label">高:</span>
-            <el-input-number 
-              v-model="config.windowHeight" 
-              :min="40" 
-              :max="9999"
-              :controls="false"
-              style="width: 80px"
-            />
+            <el-input-number v-model="config.windowHeight" :min="40" :max="9999" :controls="false"
+              style="width: 80px" />
           </div>
           <div class="inline-item">
             <span class="inline-label">每行窗口数:</span>
-            <el-input-number 
-              v-model="config.columns" 
-              :min="1" 
-              :max="20"
-              :controls="false"
-              style="width: 60px"
-            />
+            <el-input-number v-model="config.columns" :min="1" :max="20" :controls="false" style="width: 60px" />
           </div>
         </div>
       </div>
@@ -289,21 +245,11 @@ onMounted(() => {
         <div class="form-content form-inline">
           <div class="inline-item">
             <span class="inline-label">横向间距:</span>
-            <el-input-number 
-              v-model="config.gapX" 
-              :min="0" 
-              :max="100"
-              style="width: 100px"
-            />
+            <el-input-number v-model="config.gapX" :min="0" :max="100" style="width: 100px" />
           </div>
           <div class="inline-item">
             <span class="inline-label">纵向间距:</span>
-            <el-input-number 
-              v-model="config.gapY" 
-              :min="0" 
-              :max="100"
-              style="width: 100px"
-            />
+            <el-input-number v-model="config.gapY" :min="0" :max="100" style="width: 100px" />
           </div>
         </div>
       </div>
@@ -359,16 +305,16 @@ onMounted(() => {
   cursor: pointer;
   font-size: 14px;
   transition: all 0.2s;
-  
+
   &:first-child {
     border-right: 1px solid var(--color-border-default);
   }
-  
+
   &.active {
     background: var(--color-accent-blue);
     color: white;
   }
-  
+
   &:hover:not(.active) {
     background: var(--color-bg-tertiary);
   }
@@ -440,7 +386,7 @@ onMounted(() => {
   font-size: 14px;
   cursor: pointer;
   transition: all 0.2s;
-  
+
   &:hover {
     background: var(--color-accent-blue);
     color: white;
@@ -450,12 +396,12 @@ onMounted(() => {
 .footer-right {
   display: flex;
   gap: 8px;
-  
+
   :deep(.el-button--primary) {
     background-color: var(--color-accent-blue);
     border-color: var(--color-accent-blue);
     color: white;
-    
+
     &:hover {
       background-color: #1d4ed8;
       border-color: #1d4ed8;

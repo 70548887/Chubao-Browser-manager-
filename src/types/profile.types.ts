@@ -131,8 +131,16 @@ export interface FingerprintConfig {
     /** WebGL Info */
     webglVendor: string
     webglRenderer: string
+    /** WebGL Unmasked 模式: 'mask' | 'real' */
+    webglUnmaskedMode?: 'mask' | 'real'
+    /** WebGL Vendor Unmasked */
+    webglVendorUnmasked?: string
+    /** WebGL Renderer Unmasked */
+    webglRendererUnmasked?: string
     /** WebGpu */
     webgpu: boolean
+    /** WebGPU 模式: 'webgl' | 'real' | 'disabled' */
+    webgpuMode?: 'webgl' | 'real' | 'disabled'
     /** Canvas */
     canvas: 'noise' | 'block' | 'off'
     /** AudioContext */
@@ -161,6 +169,31 @@ export interface FingerprintConfig {
     disableSandbox: boolean
     /** 启动参数 */
     launchArgs?: string
+    
+    // 字体配置
+    /** 字体模式 */
+    fontsMode?: 'subset' | 'real' | 'custom' | 'random'
+    /** 字体列表 */
+    fontsList?: string[]
+    /** 自定义字体 */
+    customFonts?: string
+    
+    // Variations 配置
+    /** 启用 Variations */
+    variationsEnabled?: boolean
+    /** Variations Seed ID */
+    variationsSeedId?: string
+    
+    /** 地理位置模式: 'auto' | 'custom' | 'disabled' */
+    geolocationMode?: string
+    /** 纬度 */
+    geolocationLatitude?: number
+    /** 经度 */
+    geolocationLongitude?: number
+    /** 精度 (米) */
+    geolocationAccuracy?: number
+    /** 地理位置权限提示: 'ask' | 'allow' | 'block' */
+    geolocationPrompt?: string
 }
 
 /** 环境/配置文件 */

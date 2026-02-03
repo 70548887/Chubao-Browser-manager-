@@ -2,6 +2,7 @@
 /**
  * @description 创建窗口 - 第二步：基础设置
  */
+import { ref, watch } from 'vue'
 import type { CreateProfileFormData } from '../../composables/useCreateProfile'
 import { 
   LANGUAGE_OPTIONS, 
@@ -22,6 +23,62 @@ const emit = defineEmits<{
 const updateField = <K extends keyof CreateProfileFormData>(key: K, value: CreateProfileFormData[K]) => {
   emit('update:modelValue', { ...props.modelValue, [key]: value })
 }
+
+// IP 地理位置查询状态
+const ipGeoLoading = ref(false)
+const ipGeoError = ref('')
+const ipGeoInfo = ref<{
+  ip: string
+  country: string
+  city: string
+  lat: number
+  lon: number
+  timezone: string
+} | null>(null)
+
+// 根据 IP 获取地理位置
+async function fetchGeoByIP() {
+  ipGeoLoading.value = true
+  ipGeoError.value = ''
+  
+  try {
+    // 使用 ip-api.com 免费 API
+    const response = await fetch('http://ip-api.com/json/?fields=status,message,country,city,lat,lon,timezone,query')
+    const data = await response.json()
+    
+    if (data.status === 'success') {
+      ipGeoInfo.value = {
+        ip: data.query,
+        country: data.country,
+        city: data.city,
+        lat: data.lat,
+        lon: data.lon,
+        timezone: data.timezone
+      }
+      
+      // 自动填充经纬度
+      emit('update:modelValue', {
+        ...props.modelValue,
+        geolocationLatitude: data.lat,
+        geolocationLongitude: data.lon
+      })
+    } else {
+      ipGeoError.value = data.message || '获取失败'
+    }
+  } catch (err) {
+    ipGeoError.value = '网络请求失败'
+    console.error('IP 地理位置查询失败:', err)
+  } finally {
+    ipGeoLoading.value = false
+  }
+}
+
+// 当选择"基于 IP"时自动查询
+watch(() => props.modelValue.geolocation, (newVal) => {
+  if (newVal === 'ip') {
+    fetchGeoByIP()
+  }
+})
 </script>
 
 <template>
@@ -87,8 +144,66 @@ const updateField = <K extends keyof CreateProfileFormData>(key: K, value: Creat
           @change="updateField('geolocation', ($event.target as HTMLSelectElement).value)"
         >
           <option value="auto">自动获取</option>
+          <option value="ip">基于 IP 匹配</option>
           <option value="custom">自定义</option>
         </select>
+      </div>
+      
+      <!-- 基于 IP 匹配结果 -->
+      <div v-if="modelValue.geolocation === 'ip'" class="form-row geo-ip-result">
+        <div v-if="ipGeoLoading" class="geo-loading">
+          <span class="loading-spinner"></span>
+          <span>正在获取 IP 地理位置...</span>
+        </div>
+        <div v-else-if="ipGeoError" class="geo-error">
+          <span>❌ {{ ipGeoError }}</span>
+          <button type="button" class="btn-retry" @click="fetchGeoByIP">重试</button>
+        </div>
+        <div v-else-if="ipGeoInfo" class="geo-info">
+          <div class="geo-info-row">
+            <span class="geo-label">IP:</span>
+            <span class="geo-value">{{ ipGeoInfo.ip }}</span>
+          </div>
+          <div class="geo-info-row">
+            <span class="geo-label">位置:</span>
+            <span class="geo-value">{{ ipGeoInfo.country }} - {{ ipGeoInfo.city }}</span>
+          </div>
+          <div class="geo-info-row">
+            <span class="geo-label">经纬度:</span>
+            <span class="geo-value">{{ ipGeoInfo.lat }}, {{ ipGeoInfo.lon }}</span>
+          </div>
+          <div class="geo-info-row">
+            <span class="geo-label">时区:</span>
+            <span class="geo-value">{{ ipGeoInfo.timezone }}</span>
+          </div>
+          <button type="button" class="btn-refresh" @click="fetchGeoByIP">重新获取</button>
+        </div>
+      </div>
+      
+      <!-- 自定义经纬度输入 -->
+      <div v-if="modelValue.geolocation === 'custom'" class="form-row geo-inputs">
+        <div class="geo-input-group">
+          <label class="form-label-small">纬度</label>
+          <input 
+            type="number" 
+            step="0.0001"
+            :value="modelValue.geolocationLatitude"
+            class="form-input geo-input"
+            placeholder="如: 31.2304"
+            @input="updateField('geolocationLatitude', Number(($event.target as HTMLInputElement).value))"
+          />
+        </div>
+        <div class="geo-input-group">
+          <label class="form-label-small">经度</label>
+          <input 
+            type="number" 
+            step="0.0001"
+            :value="modelValue.geolocationLongitude"
+            class="form-input geo-input"
+            placeholder="如: 121.4737"
+            @input="updateField('geolocationLongitude', Number(($event.target as HTMLInputElement).value))"
+          />
+        </div>
       </div>
       
       <div class="form-row">

@@ -15,6 +15,11 @@ import { useDashboard } from './composables/useDashboard'
 
 const navigateTo = inject<(page: string) => void>('navigateTo')
 
+// 定义 emit 事件
+const emit = defineEmits<{
+  (e: 'create-new-window'): void
+}>()
+
 // 排列窗口弹窗状态
 const arrangeDialogVisible = ref(false)
 
@@ -22,7 +27,7 @@ const arrangeDialogVisible = ref(false)
 const {
   // Stores
   groupStore,
-  
+
   // 状态
   isLoading,
   selectedIds,
@@ -41,7 +46,7 @@ const {
   batchResultData,
   moveGroupDialogVisible,
   targetGroupId,
-  
+
   // 计算属性
   filteredProfiles,
   paginatedProfiles,
@@ -49,7 +54,7 @@ const {
   isAllSelected,
   profiles,
   runningCount,
-  
+
   // 方法
   closeNotification,
   handleSelectAll,
@@ -65,6 +70,10 @@ const {
   handleBatchLaunch,
   handleBatchStop,
   handleBatchCommand,
+  handleClone,
+  handleExport,
+  handleExportCookie,
+  handleClearCache,
   confirmMoveGroup,
   initDashboard,
 } = useDashboard(navigateTo)
@@ -118,7 +127,7 @@ defineExpose({
             <span class="stat-text">停止: <strong>{{ profiles.length - runningCount }}</strong></span>
           </div>
         </div>
-        
+
         <!-- 操作栏 -->
         <div class="toolbar-right">
           <!-- 左侧：筛选器 -->
@@ -130,15 +139,11 @@ defineExpose({
             </el-select>
             <el-select v-model="filterGroup" size="default" placeholder="所有分组">
               <el-option label="所有分组" value="all" />
-              <el-option
-                v-for="group in groupStore.sortedGroups"
-                :key="group.id"
-                :label="`${group.name} (${group.profileCount || 0})`"
-                :value="group.id"
-              />
+              <el-option v-for="group in groupStore.sortedGroups" :key="group.id"
+                :label="`${group.name} (${group.profileCount || 0})`" :value="group.id" />
             </el-select>
           </div>
-          
+
           <!-- 右侧：批量操作按钮 -->
           <div class="batch-actions">
             <button class="batch-btn batch-start" @click="handleBatchLaunch">
@@ -153,7 +158,7 @@ defineExpose({
               <span class="material-symbols-outlined">grid_view</span>
               <span>排列窗口</span>
             </button>
-            
+
             <!-- 更多操作下拉菜单 -->
             <el-dropdown trigger="click" @command="handleBatchCommand">
               <button class="batch-btn batch-more">
@@ -181,99 +186,66 @@ defineExpose({
           </div>
         </div>
       </div>
-      
+
       <!-- 列表 -->
       <div class="list-container" v-loading="isLoading">
-        <ListHeader
-          :is-all-selected="isAllSelected"
-          :sort-field="sortField"
-          :sort-order="sortOrder"
-          @select-all="handleSelectAll"
-          @sort="handleSort"
-        />
-        
+        <ListHeader :is-all-selected="isAllSelected" :sort-field="sortField" :sort-order="sortOrder"
+          @select-all="handleSelectAll" @sort="handleSort" />
+
         <div class="list-body">
-          <ProfileRow
-            v-for="profile in paginatedProfiles"
-            :key="profile.id"
-            :profile="profile"
-            :index="profile.index"
-            :is-selected="selectedIds.has(profile.id)"
-            @select="handleSelect"
-            @launch="handleLaunch"
-            @stop="handleStop"
-            @edit="handleEdit"
-            @delete="handleDelete"
-          />
-          
+          <ProfileRow v-for="profile in paginatedProfiles" :key="profile.id" :profile="profile" :index="profile.index"
+            :is-selected="selectedIds.has(profile.id)" @select="handleSelect" @launch="handleLaunch" @stop="handleStop"
+            @edit="handleEdit" @delete="handleDelete" @clone="handleClone" @export="handleExport" 
+            @export-cookie="handleExportCookie" @clear-cache="handleClearCache" />
+
           <!-- 空状态 -->
           <div v-if="!isLoading && filteredProfiles.length === 0" class="empty-state">
-            <el-icon class="empty-icon"><Files /></el-icon>
+            <el-icon class="empty-icon">
+              <Files />
+            </el-icon>
             <p class="empty-text">暂无窗口数据</p>
-            <button class="empty-action" @click="handleCreateNew">
-              <el-icon><Plus /></el-icon>
+            <button class="empty-action" @click="emit('create-new-window')">
+              <el-icon>
+                <Plus />
+              </el-icon>
               <span>创建新窗口</span>
             </button>
           </div>
         </div>
-        
+
         <!-- 分页 -->
         <div v-if="totalCount > 0" class="pagination-container">
           <div class="pagination-info">
             共 <strong>{{ totalCount }}</strong> 条
           </div>
-          <el-pagination
-            v-model:current-page="currentPage"
-            v-model:page-size="pageSize"
-            :page-sizes="pageSizes"
-            :total="totalCount"
-            :pager-count="7"
-            layout="sizes, prev, pager, next, jumper"
-            background
-            size="small"
-          />
+          <el-pagination v-model:current-page="currentPage" v-model:page-size="pageSize" :page-sizes="pageSizes"
+            :total="totalCount" :pager-count="7" layout="sizes, prev, pager, next, jumper" background size="small" />
         </div>
       </div>
     </div>
-    
+
     <!-- 编辑窗口抽屉（右侧展开） -->
-    <ProfileDrawer
-      v-model:visible="drawerVisible"
-      :profile="editingProfile"
-      @success="handleDrawerSuccess"
-    />
-    
+    <ProfileDrawer v-model:visible="drawerVisible" :profile="editingProfile" @success="handleDrawerSuccess" />
+
     <!-- 批量操作结果对话框 -->
-    <BatchResultDialog
-      v-model:visible="batchResultVisible"
-      :title="batchResultTitle"
-      :result="batchResultData"
-    />
-    
+    <BatchResultDialog v-model:visible="batchResultVisible" :title="batchResultTitle" :result="batchResultData" />
+
     <!-- 批量移动分组对话框 -->
-    <el-dialog
-      v-model="moveGroupDialogVisible"
-      title="批量移动到分组"
-      width="480px"
-      :close-on-click-modal="false"
-    >
+    <el-dialog v-model="moveGroupDialogVisible" title="批量移动到分组" width="480px" :close-on-click-modal="false">
       <div class="move-group-dialog-body">
         <div class="dialog-info">
           <span class="material-symbols-outlined">info</span>
           <p>已选中 <strong>{{ selectedIds.size }}</strong> 个环境，请选择目标分组</p>
         </div>
-        
+
         <div class="form-group">
           <label class="form-label">目标分组</label>
           <el-select v-model="targetGroupId" placeholder="请选择分组" size="large" style="width: 100%">
-            <el-option
-              v-for="group in groupStore.sortedGroups"
-              :key="group.id"
-              :label="`${group.name} (${group.profileCount || 0} 个环境)`"
-              :value="group.id"
-            >
+            <el-option v-for="group in groupStore.sortedGroups" :key="group.id"
+              :label="`${group.name} (${group.profileCount || 0} 个环境)`" :value="group.id">
               <div style="display: flex; align-items: center; gap: 8px;">
-                <span class="material-symbols-outlined" style="font-size: 18px; color: var(--color-text-tertiary);">folder</span>
+                <span class="material-symbols-outlined"
+                  style="font-size: 18px; color: var(--color-text-tertiary);">folder</span>
                 <span>{{ group.name }}</span>
                 <span style="color: var(--color-text-tertiary); font-size: 12px;">({{ group.profileCount || 0 }})</span>
               </div>
@@ -281,7 +253,7 @@ defineExpose({
           </el-select>
         </div>
       </div>
-      
+
       <template #footer>
         <div class="dialog-footer">
           <el-button @click="moveGroupDialogVisible = false">取消</el-button>
@@ -289,12 +261,9 @@ defineExpose({
         </div>
       </template>
     </el-dialog>
-    
+
     <!-- 排列窗口对话框 -->
-    <ArrangeWindowsDialog
-      v-model:visible="arrangeDialogVisible"
-      :running-count="runningCount"
-    />
+    <ArrangeWindowsDialog v-model:visible="arrangeDialogVisible" :running-count="runningCount" />
   </div>
 </template>
 
@@ -330,18 +299,18 @@ defineExpose({
   border: 1px solid var(--color-border-interactive);
   border-radius: 8px;
   transition: background-color var(--duration-normal), border-color var(--duration-normal);
-  
+
   .banner-icon {
     font-size: 20px;
     color: var(--color-accent-blue);
   }
-  
+
   .banner-text {
     flex: 1;
     font-size: 14px; // text-sm
     color: var(--color-accent-blue);
   }
-  
+
   .banner-close-btn {
     display: flex;
     align-items: center;
@@ -354,12 +323,12 @@ defineExpose({
     color: var(--color-accent-blue-hover);
     cursor: pointer;
     transition: all 0.2s;
-    
+
     &:hover {
       color: var(--color-accent-blue);
       background: var(--color-active-bg);
     }
-    
+
     .material-symbols-outlined {
       font-size: 18px;
     }
@@ -373,7 +342,7 @@ defineExpose({
   flex-direction: column;
   align-items: flex-start; // 子元素不拉伸
   gap: 12px;
-  
+
   // 大屏时横向排列
   @media (min-width: 1400px) {
     flex-direction: row;
@@ -388,7 +357,7 @@ defineExpose({
   gap: 12px;
   flex-wrap: wrap;
   align-self: stretch; // 操作栏通栏
-  
+
   // 小屏时左右分布
   @media (max-width: 1399px) {
     justify-content: space-between;
@@ -407,7 +376,7 @@ defineExpose({
   border-radius: 8px;
   box-shadow: var(--shadow-md);
   transition: background-color var(--duration-normal), border-color var(--duration-normal);
-  
+
   .stat-item {
     display: flex;
     align-items: center;
@@ -415,40 +384,40 @@ defineExpose({
     font-size: 14px;
     color: var(--color-text-tertiary);
     transition: color var(--duration-normal);
-    
+
     strong {
       color: var(--color-text-primary);
       font-weight: 700;
       transition: color var(--duration-normal);
     }
   }
-  
+
   .stat-divider {
     width: 1px;
     height: 16px;
     background: var(--color-border-default);
     transition: background-color var(--duration-normal);
   }
-  
+
   .stat-dot {
     width: 10px;
     height: 10px;
     border-radius: 50%;
     flex-shrink: 0;
-    
+
     &.stat-dot-neutral {
       background: var(--color-border-strong);
     }
-    
+
     &.stat-dot-running {
       background: var(--color-status-running);
       animation: pulse-dot 2s infinite;
     }
-    
+
     &.stat-dot-error {
       background: var(--color-status-error);
     }
-    
+
     &.stat-dot-stopped {
       background: var(--color-text-tertiary);
     }
@@ -456,9 +425,12 @@ defineExpose({
 }
 
 @keyframes pulse-dot {
-  0%, 100% {
+
+  0%,
+  100% {
     box-shadow: 0 0 0 rgba(34, 197, 94, 0.4);
   }
+
   50% {
     box-shadow: 0 0 8px rgba(34, 197, 94, 0.8);
   }
@@ -469,10 +441,10 @@ defineExpose({
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  
+
   :deep(.el-select) {
     width: 140px;
-    
+
     .el-input__wrapper {
       background: var(--color-bg-secondary);
       border: 1px solid var(--color-border-default);
@@ -480,11 +452,11 @@ defineExpose({
       box-shadow: var(--shadow-xs);
       height: 36px;
       transition: background-color var(--duration-normal), border-color var(--duration-normal);
-      
+
       &:hover {
         border-color: var(--color-border-strong);
       }
-      
+
       &.is-focus {
         border-color: var(--color-accent-blue);
         box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
@@ -523,16 +495,16 @@ defineExpose({
   transition: all 0.2s;
   box-shadow: var(--shadow-xs);
   white-space: nowrap;
-  
+
   .material-symbols-outlined {
     font-size: 18px;
   }
-  
+
   &.batch-start {
     background: var(--color-status-success-bg);
     border-color: var(--color-status-success-border);
     color: var(--color-status-success-text);
-    
+
     &:hover {
       background: var(--color-status-success-border);
       border-color: var(--color-accent-success);
@@ -540,12 +512,12 @@ defineExpose({
       box-shadow: 0 4px 6px rgba(16, 185, 129, 0.2);
     }
   }
-  
+
   &.batch-stop {
     background: var(--color-bg-secondary);
     border-color: var(--color-border-default);
     color: var(--color-text-tertiary);
-    
+
     &:hover {
       color: var(--color-status-error);
       border-color: var(--color-status-error-border);
@@ -554,12 +526,12 @@ defineExpose({
       box-shadow: 0 4px 6px rgba(239, 68, 68, 0.15);
     }
   }
-  
+
   &.batch-arrange {
     background: var(--color-bg-secondary);
     border-color: var(--color-border-default);
     color: var(--color-text-tertiary);
-    
+
     &:hover {
       color: var(--color-accent-blue);
       border-color: var(--color-border-interactive);
@@ -568,12 +540,12 @@ defineExpose({
       box-shadow: 0 4px 6px rgba(37, 99, 235, 0.15);
     }
   }
-  
+
   &.batch-delete {
     background: var(--color-bg-secondary);
     border-color: var(--color-border-default);
     color: var(--color-text-tertiary);
-    
+
     &:hover {
       color: var(--color-accent-danger);
       border-color: var(--color-status-error-border);
@@ -582,12 +554,12 @@ defineExpose({
       box-shadow: 0 4px 6px rgba(220, 38, 38, 0.2);
     }
   }
-  
+
   &.batch-move {
     background: var(--color-bg-secondary);
     border-color: var(--color-border-default);
     color: var(--color-text-tertiary);
-    
+
     &:hover {
       color: var(--color-accent-blue);
       border-color: var(--color-border-interactive);
@@ -596,12 +568,12 @@ defineExpose({
       box-shadow: 0 4px 6px rgba(37, 99, 235, 0.15);
     }
   }
-  
+
   &.batch-duplicate {
     background: var(--color-bg-secondary);
     border-color: var(--color-border-default);
     color: var(--color-text-tertiary);
-    
+
     &:hover {
       color: #7c3aed;
       border-color: #ddd6fe;
@@ -610,17 +582,17 @@ defineExpose({
       box-shadow: 0 4px 6px rgba(124, 58, 237, 0.15);
     }
   }
-  
+
   &.batch-more {
     background: var(--color-bg-secondary);
     border-color: var(--color-border-default);
     color: var(--color-text-tertiary);
-    
+
     .dropdown-icon {
       font-size: 18px;
       margin-left: -2px;
     }
-    
+
     &:hover {
       color: var(--color-text-primary);
       border-color: var(--color-border-strong);
@@ -629,7 +601,7 @@ defineExpose({
       box-shadow: var(--shadow-sm);
     }
   }
-  
+
   &:active {
     transform: translateY(0);
   }
@@ -641,15 +613,15 @@ defineExpose({
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  
+
   .material-symbols-outlined {
     font-size: 18px;
     color: var(--color-text-tertiary);
   }
-  
+
   &:hover {
     background: var(--color-hover-bg);
-    
+
     .material-symbols-outlined {
       color: var(--color-accent-blue);
     }
@@ -677,20 +649,20 @@ defineExpose({
   overflow-y: auto;
   background: var(--color-bg-secondary);
   transition: background-color var(--duration-normal);
-  
+
   // 自定义滚动条
   &::-webkit-scrollbar {
     width: 6px;
   }
-  
+
   &::-webkit-scrollbar-track {
     background: transparent;
   }
-  
+
   &::-webkit-scrollbar-thumb {
     background: var(--color-border-strong);
     border-radius: 3px;
-    
+
     &:hover {
       background: var(--color-text-tertiary);
     }
@@ -704,19 +676,19 @@ defineExpose({
   align-items: center;
   justify-content: center;
   padding: 48px 0;
-  
+
   .empty-icon {
     font-size: 48px;
     color: var(--color-text-tertiary);
     margin-bottom: 16px;
   }
-  
+
   .empty-text {
     color: var(--color-text-tertiary);
     font-size: 14px;
     margin-bottom: 16px;
   }
-  
+
   .empty-action {
     display: flex;
     align-items: center;
@@ -731,13 +703,13 @@ defineExpose({
     font-weight: 500;
     cursor: pointer;
     transition: all 0.15s ease;
-    
+
     &:hover {
       filter: brightness(1.1);
       transform: translateY(-2px);
       box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
     }
-    
+
     &:active {
       transform: translateY(0);
     }
@@ -755,17 +727,17 @@ defineExpose({
   border-top: 1px solid var(--color-border-default);
   background: var(--color-bg-overlay);
   transition: background-color var(--duration-normal), border-color var(--duration-normal);
-  
+
   .pagination-info {
     color: var(--color-text-tertiary);
     font-size: 12px;
   }
-  
+
   :deep(.el-pagination) {
     display: flex;
     align-items: center;
     gap: 8px;
-    
+
     .el-pagination__sizes {
       .el-input__wrapper {
         background: var(--color-bg-secondary);
@@ -775,7 +747,7 @@ defineExpose({
         padding: 0 8px;
       }
     }
-    
+
     .btn-prev,
     .btn-next {
       width: 32px;
@@ -784,22 +756,22 @@ defineExpose({
       border: none;
       color: var(--color-text-tertiary);
       border-radius: 6px;
-      
+
       &:hover:not(:disabled) {
         background: var(--color-hover-bg);
         color: var(--color-text-primary);
       }
-      
+
       &:disabled {
         opacity: 0.4;
         cursor: not-allowed;
       }
     }
-    
+
     .el-pager {
       display: flex;
       gap: 4px;
-      
+
       li {
         min-width: 28px;
         height: 28px;
@@ -812,20 +784,20 @@ defineExpose({
         font-weight: 500;
         margin: 0;
         transition: all 0.2s;
-        
+
         &:hover {
           background: var(--color-hover-bg);
           color: var(--color-text-primary);
           border-color: var(--color-border-strong);
         }
-        
+
         &.is-active {
           background: var(--color-accent-blue);
           color: white;
           border-color: var(--color-accent-blue);
           box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
         }
-        
+
         &.more {
           border: none;
           background: transparent;
@@ -846,27 +818,27 @@ defineExpose({
     border: 1px solid var(--color-border-interactive);
     border-radius: 8px;
     margin-bottom: 24px;
-    
+
     .material-symbols-outlined {
       font-size: 20px;
       color: var(--color-accent-blue);
       margin-top: 2px;
     }
-    
+
     p {
       flex: 1;
       margin: 0;
       font-size: 14px;
       color: var(--color-accent-blue);
       line-height: 1.5;
-      
+
       strong {
         font-weight: 700;
         color: var(--color-accent-blue);
       }
     }
   }
-  
+
   .form-group {
     .form-label {
       display: block;
@@ -887,7 +859,7 @@ defineExpose({
     background-color: #ef4444 !important;
     border-color: #ef4444 !important;
     color: white !important;
-    
+
     &:hover {
       background-color: #dc2626 !important;
       border-color: #dc2626 !important;

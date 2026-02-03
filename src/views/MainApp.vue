@@ -17,7 +17,7 @@ import CreateWindowDialog from '@/features/dashboard/components/CreateWindowDial
 import UpdateDialog from '@/components/common/UpdateDialog.vue'
 import { useUIStore } from '@/stores/ui.store'
 import { createProfile } from '@/api/profileApi'
-import { ElMessage } from 'element-plus'
+import { Message } from '@/utils/message'
 
 // 当前页面
 const currentPage = ref<'dashboard' | 'groups' | 'recycle' | 'proxy' | 'tags' | 'settings' | 'rpa' | 'extensions'>('dashboard')
@@ -32,6 +32,7 @@ const dashboardRef = ref()
 
 // 新建窗口对话框状态
 const createWindowDialogVisible = ref(false)
+const isCreatingProfile = ref(false) // 防止重复提交
 
 const handleCreateNew = () => {
   console.log('🔵 [MainApp] handleCreateNew 被调用，打开新建窗口对话框')
@@ -39,8 +40,15 @@ const handleCreateNew = () => {
 }
 
 const handleCreateWindowSubmit = async (formData: any) => {
+  // 防止重复提交
+  if (isCreatingProfile.value) {
+    console.log('❗ [MainApp] 正在创建中，忽略重复提交')
+    return
+  }
+
+  isCreatingProfile.value = true
   console.log('✅ [MainApp] 新建窗口表单数据:', formData)
-  
+
   try {
     // 构建代理配置（仅在填写了代理信息时才传递）
     let proxyConfig: { type: 'http' | 'https' | 'socks5'; host: string; port: number; username?: string; password?: string } | undefined = undefined
@@ -60,7 +68,7 @@ const handleCreateWindowSubmit = async (formData: any) => {
         password: formData.proxyPassword || undefined,
       }
     }
-    
+
     // 调用后端API创建窗口
     const profileData = {
       name: formData.name || `窗口_${Date.now()}`,
@@ -69,18 +77,23 @@ const handleCreateWindowSubmit = async (formData: any) => {
       fingerprint: formData.fingerprint,
       proxy: proxyConfig,
     }
-    
+
     console.log('📤 [MainApp] 调用 createProfile API:', profileData)
     const newProfile = await createProfile(profileData)
     console.log('✅ [MainApp] 创建成功:', newProfile)
-    
-    ElMessage.success('窗口创建成功！')
-    
+
+    // 注意：不在这里显示成功消息，eventListener.ts 会监听 profile:created 事件并显示
+
+    // 关闭对话框（API 成功后才关闭）
+    createWindowDialogVisible.value = false
+
     // 刷新Dashboard列表
     dashboardRef.value?.handleDrawerSuccess?.()
   } catch (error) {
     console.error('❌ [MainApp] 创建窗口失败:', error)
-    ElMessage.error(`创建失败: ${error}`)
+    Message.error(`创建失败: ${error}`)
+  } finally {
+    isCreatingProfile.value = false
   }
 }
 
@@ -103,7 +116,7 @@ onMounted(() => {
 
 <template>
   <MainLayout @create-new="handleCreateNew">
-    <DashboardView v-if="currentPage === 'dashboard'" ref="dashboardRef" />
+    <DashboardView v-if="currentPage === 'dashboard'" ref="dashboardRef" @create-new-window="handleCreateNew" />
     <GroupManagement v-else-if="currentPage === 'groups'" />
     <RecycleBin v-else-if="currentPage === 'recycle'" />
     <ProxyManagement v-else-if="currentPage === 'proxy'" />
@@ -112,13 +125,10 @@ onMounted(() => {
     <RPAManagement v-else-if="currentPage === 'rpa'" />
     <ExtensionsCenter v-else-if="currentPage === 'extensions'" />
   </MainLayout>
-  
+
   <!-- 新建窗口对话框 -->
-  <CreateWindowDialog
-    :visible="createWindowDialogVisible"
-    @close="createWindowDialogVisible = false"
-    @submit="handleCreateWindowSubmit"
-  />
+  <CreateWindowDialog :visible="createWindowDialogVisible" @close="createWindowDialogVisible = false"
+    @submit="handleCreateWindowSubmit" />
 
   <!-- 版本更新弹窗 -->
   <UpdateDialog />

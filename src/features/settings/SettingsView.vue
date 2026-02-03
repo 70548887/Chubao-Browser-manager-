@@ -15,13 +15,8 @@
             <span class="required">*</span>
           </label>
           <div class="setting-input-group">
-            <input
-              v-model="settings.kernelPath"
-              type="text"
-              class="setting-input"
-              placeholder="请选择浏览器内核可执行文件"
-              readonly
-            />
+            <input v-model="settings.kernelPath" type="text" class="setting-input" placeholder="请选择浏览器内核可执行文件"
+              readonly />
             <button class="btn-select" @click="selectKernelPath">
               <span class="icon">📁</span>
               选择文件
@@ -35,13 +30,8 @@
         <div class="setting-item">
           <label class="setting-label">用户数据目录</label>
           <div class="setting-input-group">
-            <input
-              v-model="settings.userDataDir"
-              type="text"
-              class="setting-input"
-              placeholder="请选择用户数据存储目录"
-              readonly
-            />
+            <input v-model="settings.userDataDir" type="text" class="setting-input" placeholder="请选择用户数据存储目录"
+              readonly />
             <button class="btn-select" @click="selectUserDataDir">
               <span class="icon">📁</span>
               选择目录
@@ -62,12 +52,8 @@
 
         <div class="setting-item">
           <label class="setting-label">代理服务器</label>
-          <input
-            v-model="settings.defaultProxy"
-            type="text"
-            class="setting-input"
-            placeholder="例如：http://127.0.0.1:8080"
-          />
+          <input v-model="settings.defaultProxy" type="text" class="setting-input"
+            placeholder="例如：http://127.0.0.1:8080" />
           <p class="setting-hint">
             格式：协议://主机:端口，留空表示不使用代理
           </p>
@@ -92,7 +78,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { Message } from '@/utils/message'
 import { open as openDialog } from '@tauri-apps/plugin-dialog'
 import * as settingsApi from '@/api/settingsApi'
 
@@ -127,13 +113,13 @@ const selectKernelPath = async () => {
         extensions: ['exe']
       }]
     })
-    
+
     if (selected) {
       settings.value.kernelPath = selected
     }
   } catch (error) {
     console.error('选择文件失败:', error)
-    ElMessage.error('选择文件失败')
+    Message.error('选择文件失败')
   }
 }
 
@@ -144,13 +130,13 @@ const selectUserDataDir = async () => {
       multiple: false,
       directory: true
     })
-    
+
     if (selected) {
       settings.value.userDataDir = selected
     }
   } catch (error) {
     console.error('选择目录失败:', error)
-    ElMessage.error('选择目录失败')
+    Message.error('选择目录失败')
   }
 }
 
@@ -167,7 +153,7 @@ const loadSettings = async () => {
     originalSettings.value = { ...settings.value }
   } catch (error) {
     console.error('加载设置失败:', error)
-    ElMessage.warning('加载设置失败，使用默认值')
+    Message.warning('加载设置失败，使用默认值')
   } finally {
     isLoading.value = false
   }
@@ -176,7 +162,7 @@ const loadSettings = async () => {
 // 保存设置
 const handleSave = async () => {
   if (!isValid.value) {
-    ElMessage.warning('请填写必填项')
+    Message.warning('请填写必填项')
     return
   }
 
@@ -184,20 +170,20 @@ const handleSave = async () => {
   try {
     // 保存各项设置
     await settingsApi.setSettingValue('kernel_path', settings.value.kernelPath)
-    
+
     if (settings.value.userDataDir) {
       await settingsApi.setSettingValue('user_data_dir', settings.value.userDataDir)
     }
-    
+
     if (settings.value.defaultProxy) {
       await settingsApi.setSettingValue('default_proxy', settings.value.defaultProxy)
     }
 
     originalSettings.value = { ...settings.value }
-    ElMessage.success('设置保存成功')
+    Message.success('设置保存成功')
   } catch (error) {
     console.error('保存设置失败:', error)
-    ElMessage.error('保存设置失败：' + error)
+    Message.error('保存设置失败：' + error)
   } finally {
     isSaving.value = false
   }
@@ -206,7 +192,7 @@ const handleSave = async () => {
 // 重置设置
 const handleReset = () => {
   settings.value = { ...originalSettings.value }
-  ElMessage.info('已重置为上次保存的设置')
+  Message.info('已重置为上次保存的设置')
 }
 
 // 初始化
@@ -424,6 +410,7 @@ onMounted(() => {
   from {
     transform: rotate(0deg);
   }
+
   to {
     transform: rotate(360deg);
   }

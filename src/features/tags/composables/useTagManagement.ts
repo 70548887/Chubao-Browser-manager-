@@ -4,7 +4,8 @@
  */
 
 import { ref, reactive, computed, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessageBox } from 'element-plus'
+import { Message } from '@/utils/message'
 import { getTags, createTag, updateTag, deleteTag, type Tag } from '@/api/tagApi'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { useUIStore } from '@/stores/ui.store'
@@ -35,6 +36,7 @@ export function useTagManagement() {
   // 分页状态
   const currentPage = ref(1)
   const pageSize = ref(10)
+  const pageSizes = [10, 20, 50, 100]
 
   // 弹窗状态
   const dialogVisible = ref(false)
@@ -97,6 +99,8 @@ export function useTagManagement() {
     return paginatedTags.value.length > 0 && selectedIds.value.length === paginatedTags.value.length
   })
 
+  const totalCount = computed(() => filteredTags.value.length)
+
   // ==================== 辅助方法 ====================
   const formatDate = (timestamp: number) => {
     const date = new Date(timestamp)
@@ -122,7 +126,7 @@ export function useTagManagement() {
       tags.value = await getTags()
     } catch (error) {
       console.error('Failed to load tags:', error)
-      ElMessage.error('加载标签列表失败')
+      Message.error('加载标签列表失败')
     } finally {
       isLoading.value = false
     }
@@ -171,18 +175,18 @@ export function useTagManagement() {
       await deleteTag(tag.id)
       tags.value = tags.value.filter(t => t.id !== tag.id)
       selectedIds.value = selectedIds.value.filter(id => id !== tag.id)
-      ElMessage.success('删除成功')
+      Message.success('删除成功')
     } catch (error) {
       if (error !== 'cancel') {
         console.error('Failed to delete tag:', error)
-        ElMessage.error('删除标签失败')
+        Message.error('删除标签失败')
       }
     }
   }
 
   const handleBatchDelete = async () => {
     if (selectedIds.value.length === 0) {
-      ElMessage.warning('请先选择要删除的标签')
+      Message.warning('请先选择要删除的标签')
       return
     }
     
@@ -214,9 +218,9 @@ export function useTagManagement() {
       selectedIds.value = []
       
       if (failCount === 0) {
-        ElMessage.success(`成功删除 ${successCount} 个标签`)
+        Message.success(`成功删除 ${successCount} 个标签`)
       } else {
-        ElMessage.warning(`删除完成：成功 ${successCount} 个，失败 ${failCount} 个`)
+        Message.warning(`删除完成：成功 ${successCount} 个，失败 ${failCount} 个`)
       }
     } catch {
       // 用户取消删除
@@ -225,7 +229,7 @@ export function useTagManagement() {
 
   const handleSubmit = async () => {
     if (!formData.name.trim()) {
-      ElMessage.warning('请输入标签名称')
+      Message.warning('请输入标签名称')
       return
     }
     
@@ -240,7 +244,7 @@ export function useTagManagement() {
         if (index !== -1) {
           tags.value[index] = { ...updated, color: formData.color } as any
         }
-        ElMessage.success('修改成功')
+        Message.success('修改成功')
       } else {
         const newTag = await createTag({
           name: formData.name,
@@ -248,7 +252,7 @@ export function useTagManagement() {
           remark: formData.remark
         })
         tags.value.push({ ...newTag, color: formData.color } as any)
-        ElMessage.success('添加成功')
+        Message.success('添加成功')
       }
       
       dialogVisible.value = false
@@ -258,7 +262,7 @@ export function useTagManagement() {
       const detailMessage = errorMessage.includes(':') 
         ? errorMessage.split(':').slice(1).join(':').trim() 
         : errorMessage
-      ElMessage.error(detailMessage)
+      Message.error(detailMessage)
     }
   }
 
@@ -295,6 +299,7 @@ export function useTagManagement() {
     isLoading,
     currentPage,
     pageSize,
+    pageSizes,
     dialogVisible,
     dialogTitle,
     isEditMode,
@@ -306,6 +311,7 @@ export function useTagManagement() {
     filteredTags,
     paginatedTags,
     isAllSelected,
+    totalCount,
     
     // 常量
     colorOptions: COLOR_OPTIONS,

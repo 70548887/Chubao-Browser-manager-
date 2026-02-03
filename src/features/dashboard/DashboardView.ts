@@ -1,14 +1,15 @@
 /**
  * @file DashboardView.ts
- * @description 仪表盘主视图 - 业务逻辑层
+ * @description 仪表盘主视图 - 业务逻辑�?
  */
 
 import { ref, computed, onMounted } from 'vue'
 import type { Profile } from '@/types'
 import { mockProfiles } from './mock.data'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessageBox } from 'element-plus'
+import { Message } from '@/utils/message'
 
-// ==================== 状态管理 ====================
+// ==================== 状态管�?====================
 export const profiles = ref<Profile[]>([])
 export const selectedIds = ref<Set<string>>(new Set())
 export const isLoading = ref(false)
@@ -17,23 +18,23 @@ export const filterStatus = ref<string>('all')
 export const sortField = ref('updatedAt')
 export const sortOrder = ref<'asc' | 'desc'>('desc')
 
-// 抽屉状态
+// 抽屉状�?
 export const drawerVisible = ref(false)
 export const editingProfile = ref<Profile | undefined>(undefined)
 
-// ==================== 计算属性 ====================
+// ==================== 计算属�?====================
 /**
  * 过滤后的环境列表
  */
 export const filteredProfiles = computed(() => {
   let result = profiles.value
   
-  // 状态筛选
+  // 状态筛�?
   if (filterStatus.value !== 'all') {
     result = result.filter(p => p.status === filterStatus.value)
   }
   
-  // 关键词搜索
+  // 关键词搜�?
   if (searchKeyword.value) {
     const keyword = searchKeyword.value.toLowerCase()
     result = result.filter(p => 
@@ -57,7 +58,7 @@ export const filteredProfiles = computed(() => {
 })
 
 /**
- * 是否全选
+ * 是否全�?
  */
 export const isAllSelected = computed(() => 
   filteredProfiles.value.length > 0 && 
@@ -73,7 +74,7 @@ export const runningCount = computed(() =>
 
 // ==================== 选择操作 ====================
 /**
- * 全选/取消全选
+ * 全�?取消全�?
  */
 export const handleSelectAll = (value: boolean) => {
   if (value) {
@@ -107,12 +108,12 @@ export const handleSort = (field: string) => {
   }
 }
 
-// ==================== 浏览器操作 ====================
+// ==================== 浏览器操�?====================
 /**
  * 启动环境
  */
 export const handleLaunch = (id: string) => {
-  ElMessage.success(`启动环境: ${id}`)
+  Message.success(`启动环境: ${id}`)
   const profile = profiles.value.find(p => p.id === id)
   if (profile) {
     profile.status = 'running'
@@ -123,7 +124,7 @@ export const handleLaunch = (id: string) => {
  * 停止环境
  */
 export const handleStop = (id: string) => {
-  ElMessage.info(`停止环境: ${id}`)
+  Message.info(`停止环境: ${id}`)
   const profile = profiles.value.find(p => p.id === id)
   if (profile) {
     profile.status = 'stopped'
@@ -148,14 +149,14 @@ export const handleDelete = async (id: string) => {
     })
     profiles.value = profiles.value.filter(p => p.id !== id)
     selectedIds.value.delete(id)
-    ElMessage.success('删除成功')
+    Message.success('删除成功')
   } catch {
     // 取消删除
   }
 }
 
 /**
- * 创建新环境
+ * 创建新环�?
  */
 export const handleCreateNew = () => {
   editingProfile.value = undefined
@@ -180,7 +181,7 @@ export const handleDrawerSuccess = () => {
  */
 export const handleBatchLaunch = () => {
   if (selectedIds.value.size === 0) {
-    ElMessage.warning('请先选择环境')
+    Message.warning('请先选择环境')
     return
   }
   selectedIds.value.forEach(id => handleLaunch(id))
@@ -191,7 +192,7 @@ export const handleBatchLaunch = () => {
  */
 export const handleBatchStop = () => {
   if (selectedIds.value.size === 0) {
-    ElMessage.warning('请先选择环境')
+    Message.warning('请先选择环境')
     return
   }
   selectedIds.value.forEach(id => handleStop(id))

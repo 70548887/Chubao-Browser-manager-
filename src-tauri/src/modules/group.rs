@@ -88,7 +88,7 @@ impl GroupService {
                 g.updated_at as "updated_at!: String",
                 COUNT(p.id) as "profile_count!: i32"
             FROM groups g
-            LEFT JOIN profiles p ON p.group_id = g.id
+            LEFT JOIN profiles p ON p.group_id = g.id AND p.deleted_at IS NULL
             GROUP BY g.id
             ORDER BY g.sort ASC, g.created_at ASC
             "#
@@ -137,7 +137,7 @@ impl GroupService {
                 g.updated_at as "updated_at!: String",
                 COUNT(p.id) as "profile_count!: i32"
             FROM groups g
-            LEFT JOIN profiles p ON p.group_id = g.id
+            LEFT JOIN profiles p ON p.group_id = g.id AND p.deleted_at IS NULL
             WHERE g.id = ?
             GROUP BY g.id
             "#,

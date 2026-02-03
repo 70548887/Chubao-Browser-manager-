@@ -5,7 +5,7 @@
  */
 
 import { computed } from 'vue'
-import { ElMessage } from 'element-plus'
+import { Message } from '@/utils/message'
 import type { BatchResult } from '@/types'
 
 interface Props {
@@ -50,35 +50,33 @@ const handleClose = () => {
 // 复制失败信息
 const copyFailedInfo = async () => {
   if (failedItems.value.length === 0) return
-  
+
   const text = failedItems.value
     .map(item => `${item.profileId}: ${item.error || '未知错误'}`)
     .join('\n')
-  
+
   try {
     await navigator.clipboard.writeText(text)
-    ElMessage.success('失败信息已复制到剪贴板')
+    Message.success('失败信息已复制到剪贴板')
   } catch {
-    ElMessage.error('复制失败，请手动复制')
+    Message.error('复制失败，请手动复制')
   }
 }
 </script>
 
 <template>
-  <el-dialog
-    :model-value="visible"
-    :title="title"
-    width="500px"
-    :close-on-click-modal="false"
-    @update:model-value="emit('update:visible', $event)"
-    @close="handleClose"
-  >
+  <el-dialog :model-value="visible" :title="title" width="500px" :close-on-click-modal="false"
+    @update:model-value="emit('update:visible', $event)" @close="handleClose">
     <div v-if="result" class="batch-result">
       <!-- 摘要 -->
       <div class="result-summary" :class="{ success: isAllSuccess, partial: !isAllSuccess }">
         <div class="summary-icon">
-          <el-icon v-if="isAllSuccess" class="icon-success"><CircleCheck /></el-icon>
-          <el-icon v-else class="icon-warning"><Warning /></el-icon>
+          <el-icon v-if="isAllSuccess" class="icon-success">
+            <CircleCheck />
+          </el-icon>
+          <el-icon v-else class="icon-warning">
+            <Warning />
+          </el-icon>
         </div>
         <div class="summary-text">
           <div class="summary-title">
@@ -95,16 +93,14 @@ const copyFailedInfo = async () => {
         <div class="list-header">
           <span class="list-title">失败详情 ({{ failedItems.length }})</span>
           <el-button type="primary" link size="small" @click="copyFailedInfo">
-            <el-icon><CopyDocument /></el-icon>
+            <el-icon>
+              <CopyDocument />
+            </el-icon>
             复制
           </el-button>
         </div>
         <div class="list-content">
-          <div 
-            v-for="item in failedItems" 
-            :key="item.profileId" 
-            class="failed-item"
-          >
+          <div v-for="item in failedItems" :key="item.profileId" class="failed-item">
             <span class="item-id">{{ item.profileId }}</span>
             <span class="item-error">{{ item.error || '未知错误' }}</span>
           </div>
@@ -115,13 +111,7 @@ const copyFailedInfo = async () => {
       <el-collapse v-if="successItems.length > 0" class="success-collapse">
         <el-collapse-item :title="`成功项 (${successItems.length})`" name="success">
           <div class="success-list">
-            <el-tag
-              v-for="item in successItems"
-              :key="item.profileId"
-              type="success"
-              size="small"
-              class="success-tag"
-            >
+            <el-tag v-for="item in successItems" :key="item.profileId" type="success" size="small" class="success-tag">
               {{ item.profileId }}
             </el-tag>
           </div>
@@ -150,12 +140,12 @@ const copyFailedInfo = async () => {
   gap: var(--spacing-md);
   padding: var(--spacing-lg);
   border-radius: var(--radius-lg);
-  
+
   &.success {
     background: #f0f9eb;
     border: 1px solid #e1f3d8;
   }
-  
+
   &.partial {
     background: #fdf6ec;
     border: 1px solid #faecd8;
@@ -164,11 +154,11 @@ const copyFailedInfo = async () => {
 
 .summary-icon {
   font-size: 32px;
-  
+
   .icon-success {
     color: #67c23a;
   }
-  
+
   .icon-warning {
     color: #e6a23c;
   }
@@ -221,7 +211,7 @@ const copyFailedInfo = async () => {
   gap: var(--spacing-sm);
   padding: var(--spacing-xs) var(--spacing-sm);
   border-radius: var(--radius-sm);
-  
+
   &:hover {
     background: rgba(245, 108, 108, 0.1);
   }

@@ -1,7 +1,8 @@
 // 事件监听服务 - 监听后端 Tauri 事件
 import { listen } from '@tauri-apps/api/event'
 import { useProfileStore } from '@/stores/profile.store'
-import { ElMessage } from 'element-plus'
+import { useGroupStore } from '@/stores/groupStore'
+import { Message } from '@/utils/message'
 import type { Profile } from '@/types'
 
 /**
@@ -33,6 +34,7 @@ interface BrowserErrorEvent {
  */
 export async function initEventListeners() {
     const profileStore = useProfileStore()
+    const groupStore = useGroupStore()
 
     // 1. 监听 Profile 状态变化事件
     await listen<ProfileStatusChangedEvent>('profile:status_changed', (event) => {
@@ -48,12 +50,14 @@ export async function initEventListeners() {
         console.log('Profile created:', event.payload)
         const profile = event.payload
         
-        // 将新创建的环境添加到列表（如果当前不在列表中）
+        // 将新创建的窗口添加到列表（如果当前不在列表中）
         const exists = profileStore.profiles.some(p => p.id === profile.id)
         if (!exists) {
             profileStore.profiles.unshift(profile)
-            ElMessage.success(`环境 "${profile.name}" 创建成功`)
+            Message.success(`窗口 "${profile.name}" 创建成功`)
         }
+        // 刷新分组数据（更新窗口数量）
+        groupStore.initGroups()
     })
 
     // 3. 监听 Profile 更新事件
@@ -61,11 +65,14 @@ export async function initEventListeners() {
         console.log('Profile updated:', event.payload)
         const profile = event.payload
         
-        // 更新列表中的环境信息
+        // 更新列表中的窗口信息
         const index = profileStore.profiles.findIndex(p => p.id === profile.id)
         if (index !== -1) {
             profileStore.profiles[index] = profile
+            Message.success(`窗口 "${profile.name}" 更新成功`)
         }
+        // 刷新分组数据（分组可能改变）
+        groupStore.initGroups()
     })
 
     // 4. 监听 Profile 删除事件
@@ -75,7 +82,9 @@ export async function initEventListeners() {
         
         // 从列表中移除
         profileStore.profiles = profileStore.profiles.filter(p => p.id !== id)
-        ElMessage.info('环境已删除')
+        Message.success('窗口已删除')
+        // 刷新分组数据（更新窗口数量）
+        groupStore.initGroups()
     })
 
     // 5. 监听浏览器错误事件
@@ -89,7 +98,7 @@ export async function initEventListeners() {
         // 显示错误提示
         const profile = profileStore.profiles.find(p => p.id === profileId)
         const name = profile?.name || profileId
-        ElMessage.error(`环境 "${name}" 启动失败：${error}`)
+        Message.error(`窗口 "${name}" 启动失败：${error}`)
     })
 
     console.log('Event listeners initialized')

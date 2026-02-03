@@ -1,7 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { getGroups, createGroup, updateGroup as updateGroupApi, deleteGroup as deleteGroupApi, type Group } from '@/api'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessageBox } from 'element-plus'
+import { Message } from '@/utils/message'
 
 // 导出 Group 类型
 export type { Group }
@@ -49,17 +50,16 @@ export const useGroupStore = defineStore('group', () => {
     } catch (err: any) {
       console.error('Failed to load groups from backend:', err)
       error.value = err.message || '获取分组列表失败'
-      ElMessage.error({
+      Message.error({
         message: '无法加载分组列表，请检查后端连接',
         duration: 5000,
-        showClose: true,
       })
 
       // 仅在开发模式使用 mock（可通过环境变量控制）
       if (import.meta.env.DEV && import.meta.env.VITE_USE_MOCK === 'true') {
         console.warn('Using mock data in DEV mode')
         groups.value = mockGroups
-        ElMessage.warning('当前使用模拟数据')
+        Message.warning('当前使用模拟数据')
       } else {
         // 生产模式：保持空列表，强制用户修复后端问题
         groups.value = []
@@ -83,11 +83,11 @@ export const useGroupStore = defineStore('group', () => {
       console.log('[DEBUG] 创建的分组对象:', created)
       console.log('[DEBUG] createdAt值:', created.createdAt, '类型:', typeof created.createdAt)
       groups.value.push(created)
-      ElMessage.success('创建分组成功')
+      Message.success('创建分组成功')
       return created
     } catch (err: any) {
       console.error('Failed to create group via API:', err)
-      ElMessage.error(err.message || '创建失败')
+      Message.error(err.message || '创建失败')
       throw err // 抛出错误，不再本地创建
     }
   }
@@ -109,11 +109,11 @@ export const useGroupStore = defineStore('group', () => {
         groups.value[index] = updated
       }
 
-      ElMessage.success('更新分组成功')
+      Message.success('更新分组成功')
       return updated
     } catch (err: any) {
       console.error('Failed to update group via API:', err)
-      ElMessage.error(err.message || '更新失败')
+      Message.error(err.message || '更新失败')
       return null
     }
   }
@@ -124,7 +124,7 @@ export const useGroupStore = defineStore('group', () => {
 
     // 检查分组是否为空
     if (group && group.profileCount > 0) {
-      ElMessage.error(`无法删除分组：分组内还有 ${group.profileCount} 个环境，请先清空分组`)
+      Message.error(`无法删除分组：分组内还有 ${group.profileCount} 个环境，请先清空分组`)
       return false
     }
 
@@ -145,7 +145,7 @@ export const useGroupStore = defineStore('group', () => {
       if (index !== -1) {
         groups.value.splice(index, 1)
       }
-      ElMessage.success('删除分组成功')
+      Message.success('删除分组成功')
       return true
     } catch (err: any) {
       if (err === 'cancel') {
@@ -153,7 +153,7 @@ export const useGroupStore = defineStore('group', () => {
         return false
       }
       console.error('Failed to delete group via API:', err)
-      ElMessage.error(err.message || '删除失败')
+      Message.error(err.message || '删除失败')
       return false
     }
   }

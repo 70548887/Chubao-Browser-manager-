@@ -224,27 +224,27 @@ impl ProfileService {
 
         if let Some(name) = dto.name {
             separated.push("name = ");
-            separated.push_bind(name);
+            separated.push_bind_unseparated(name);
         }
         if let Some(group) = dto.group {
             separated.push(r#""group" = "#);
-            separated.push_bind(group);
+            separated.push_bind_unseparated(group);
         }
         if let Some(remark) = dto.remark {
             separated.push("remark = ");
-            separated.push_bind(remark);
+            separated.push_bind_unseparated(remark);
         }
         if let Some(fingerprint) = fingerprint_json {
             separated.push("fingerprint = ");
-            separated.push_bind(fingerprint);
+            separated.push_bind_unseparated(fingerprint);
         }
         if let Some(proxy) = proxy_json {
             separated.push("proxy = ");
-            separated.push_bind(proxy);
+            separated.push_bind_unseparated(proxy);
         }
 
         separated.push("updated_at = ");
-        separated.push_bind(now.to_rfc3339());
+        separated.push_bind_unseparated(now.to_rfc3339());
 
         qb.push(" WHERE id = ");
         qb.push_bind(id);

@@ -481,6 +481,7 @@ async fn batch_move_to_group(
                 fingerprint: None,
                 proxy: None,
                 remark: None,
+                preferences: None,
             }).await {
                 Ok(_) => modules::BatchItemResult::success(id.clone()),
                 Err(e) => modules::BatchItemResult::failure(id.clone(), e.to_string()),
@@ -512,6 +513,7 @@ async fn batch_duplicate_profiles(
                         fingerprint: source_profile.fingerprint,
                         proxy: source_profile.proxy,
                         remark: source_profile.remark,
+                        preferences: source_profile.preferences,
                     }).await {
                         Ok(new_profile) => modules::BatchItemResult::success(new_profile.id),
                         Err(e) => modules::BatchItemResult::failure(id.clone(), e.to_string()),

@@ -4,7 +4,8 @@
  */
 
 import { ref, computed, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessageBox } from 'element-plus'
+import { Message } from '@/utils/message'
 import { 
   getRecycleBin, 
   restoreProfile, 
@@ -56,6 +57,18 @@ export function useRecycleBin() {
   // 监听全局搜索关键词
   watch(() => uiStore.searchKeyword, () => {
     currentPage.value = 1
+    selectedIds.value.clear()  // 搜索时清空选择
+  })
+
+  // 翻页时清空选择
+  watch(currentPage, () => {
+    selectedIds.value.clear()
+  })
+
+  // 切换每页数量时重置页码并清空选择
+  watch(pageSize, () => {
+    currentPage.value = 1
+    selectedIds.value.clear()
   })
 
   // ==================== 计算属性 ====================
@@ -153,7 +166,7 @@ export function useRecycleBin() {
       items.value = profiles.map((p, idx) => profileToItem(p, idx, groupMap))
     } catch (error) {
       console.error('Failed to load recycle bin:', error)
-      ElMessage.error('加载回收站失败')
+      Message.error('加载回收站失败')
     } finally {
       isLoading.value = false
     }
@@ -162,9 +175,12 @@ export function useRecycleBin() {
   // ==================== 选择操作 ====================
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
+      // 先清空之前的选择，然后选择当前页
+      selectedIds.value.clear()
       paginatedItems.value.forEach(item => selectedIds.value.add(item.id))
     } else {
-      paginatedItems.value.forEach(item => selectedIds.value.delete(item.id))
+      // 取消全选时清空所有选择
+      selectedIds.value.clear()
     }
   }
 
@@ -187,11 +203,11 @@ export function useRecycleBin() {
       await restoreProfile(item.id)
       items.value = items.value.filter(i => i.id !== item.id)
       selectedIds.value.delete(item.id)
-      ElMessage.success('恢复成功')
+      Message.success('恢复成功')
     } catch (error) {
       if (error !== 'cancel') {
         console.error('Failed to restore profile:', error)
-        ElMessage.error('恢复窗口失败')
+        Message.error('恢复窗口失败')
       }
     }
   }
@@ -206,11 +222,11 @@ export function useRecycleBin() {
       await permanentlyDeleteProfile(item.id)
       items.value = items.value.filter(i => i.id !== item.id)
       selectedIds.value.delete(item.id)
-      ElMessage.success('删除成功')
+      Message.success('删除成功')
     } catch (error) {
       if (error !== 'cancel') {
         console.error('Failed to delete profile:', error)
-        ElMessage.error('删除窗口失败')
+        Message.error('删除窗口失败')
       }
     }
   }
@@ -218,7 +234,7 @@ export function useRecycleBin() {
   // ==================== 批量操作 ====================
   const handleBatchRestore = async () => {
     if (selectedIds.value.size === 0) {
-      ElMessage.warning('请先选择要恢复的窗口')
+      Message.warning('请先选择要恢复的窗口')
       return
     }
     
@@ -237,21 +253,21 @@ export function useRecycleBin() {
       batchResultVisible.value = true
       
       if (result.failureCount === 0) {
-        ElMessage.success(`批量恢复成功：${result.successCount}/${result.total}`)
+        Message.success(`批量恢复成功：${result.successCount}/${result.total}`)
       } else {
-        ElMessage.warning(`批量恢复完成：成功 ${result.successCount}，失败 ${result.failureCount}`)
+        Message.warning(`批量恢复完成：成功 ${result.successCount}，失败 ${result.failureCount}`)
       }
     } catch (error) {
       if (error !== 'cancel') {
         console.error('Failed to batch restore:', error)
-        ElMessage.error('批量恢复失败')
+        Message.error('批量恢复失败')
       }
     }
   }
 
   const handleBatchDelete = async () => {
     if (selectedIds.value.size === 0) {
-      ElMessage.warning('请先选择要删除的窗口')
+      Message.warning('请先选择要删除的窗口')
       return
     }
     
@@ -270,21 +286,21 @@ export function useRecycleBin() {
       batchResultVisible.value = true
       
       if (result.failureCount === 0) {
-        ElMessage.success(`批量删除成功：${result.successCount}/${result.total}`)
+        Message.success(`批量删除成功：${result.successCount}/${result.total}`)
       } else {
-        ElMessage.warning(`批量删除完成：成功 ${result.successCount}，失败 ${result.failureCount}`)
+        Message.warning(`批量删除完成：成功 ${result.successCount}，失败 ${result.failureCount}`)
       }
     } catch (error) {
       if (error !== 'cancel') {
         console.error('Failed to batch delete:', error)
-        ElMessage.error('批量删除失败')
+        Message.error('批量删除失败')
       }
     }
   }
 
   const handleDeleteAll = async () => {
     if (items.value.length === 0) {
-      ElMessage.warning('回收站为空')
+      Message.warning('回收站为空')
       return
     }
     
@@ -297,11 +313,11 @@ export function useRecycleBin() {
       const count = await emptyRecycleBin()
       items.value = []
       selectedIds.value.clear()
-      ElMessage.success(`回收站已清空，删除了 ${count} 个窗口`)
+      Message.success(`回收站已清空，删除了 ${count} 个窗口`)
     } catch (error) {
       if (error !== 'cancel') {
         console.error('Failed to empty recycle bin:', error)
-        ElMessage.error('清空回收站失败')
+        Message.error('清空回收站失败')
       }
     }
   }

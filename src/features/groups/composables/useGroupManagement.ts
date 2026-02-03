@@ -4,7 +4,8 @@
  */
 
 import { ref, reactive, computed, onMounted, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessageBox } from 'element-plus'
+import { Message } from '@/utils/message'
 import { useGroupStore, type Group } from '@/stores/groupStore'
 import { useUIStore } from '@/stores/ui.store'
 
@@ -137,9 +138,9 @@ export function useGroupManagement() {
     if (!editingId.value) return
     try {
       await navigator.clipboard.writeText(editingId.value)
-      ElMessage.success('已复制到剪切板')
+      Message.success('已复制到剪切板')
     } catch {
-      ElMessage.error('复制失败')
+      Message.error('复制失败')
     }
   }
 
@@ -190,7 +191,7 @@ export function useGroupManagement() {
 
   const handleDelete = async (group: Group) => {
     if (group.id === 'default') {
-      ElMessage.warning('默认分组不可删除')
+      Message.warning('默认分组不可删除')
       return
     }
     
@@ -202,12 +203,12 @@ export function useGroupManagement() {
 
   const handleBatchDelete = async () => {
     if (selectedIds.value.length === 0) {
-      ElMessage.warning('请先选择要删除的分组')
+      Message.warning('请先选择要删除的分组')
       return
     }
     
     if (selectedIds.value.includes('default')) {
-      ElMessage.error('选中的分组包含默认分组，默认分组不可删除')
+      Message.error('选中的分组包含默认分组，默认分组不可删除')
       return
     }
     
@@ -215,7 +216,7 @@ export function useGroupManagement() {
     const nonEmptyGroups = groupsToDelete.filter(g => g && g.profileCount > 0)
     
     if (nonEmptyGroups.length > 0) {
-      ElMessage.error(`无法批量删除：${nonEmptyGroups.length} 个分组内还有环境，请先清空`)
+      Message.error(`无法批量删除：${nonEmptyGroups.length} 个分组内还有环境，请先清空`)
       return
     }
     
@@ -252,9 +253,9 @@ export function useGroupManagement() {
       selectedIds.value = []
       
       if (failCount === 0) {
-        ElMessage.success(`成功删除 ${successCount} 个分组`)
+        Message.success(`成功删除 ${successCount} 个分组`)
       } else {
-        ElMessage.warning(`删除完成：成功 ${successCount} 个，失败 ${failCount} 个`)
+        Message.warning(`删除完成：成功 ${successCount} 个，失败 ${failCount} 个`)
       }
     } catch {
       // 用户取消删除
@@ -263,7 +264,7 @@ export function useGroupManagement() {
 
   const handleSubmit = async () => {
     if (!formData.name.trim()) {
-      ElMessage.warning('请输入分组名称')
+      Message.warning('请输入分组名称')
       return
     }
     

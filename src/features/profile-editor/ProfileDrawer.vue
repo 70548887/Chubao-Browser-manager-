@@ -5,7 +5,7 @@
  */
 
 import { ref, watch, computed } from 'vue'
-import { ElMessage } from 'element-plus'
+import { Message } from '@/utils/message'
 import { useProfileStore } from '@/stores/profile.store'
 import { useProfileForm } from './composables/useProfileForm'
 import BasicInfoForm from './components/BasicInfoForm.vue'
@@ -32,8 +32,11 @@ const emit = defineEmits<Emits>()
 
 const profileStore = useProfileStore()
 
-// 保存原始指纹数据（用于 diff）
+// 保存原始数据（用于 diff）
 const originalFingerprint = ref<any>(undefined)
+const originalName = ref<string>('')
+const originalGroup = ref<string>('')
+const originalRemark = ref<string>('')
 
 // 表单逻辑
 const {
@@ -76,13 +79,13 @@ const goToStep = async (index: number) => {
     currentStep.value = index
     return
   }
-  
+
   // 跳转到其他步骤前，检查窗口信息是否填写
   if (!formData.value.name || !formData.value.name.trim()) {
-    ElMessage.warning('请先填写窗口名称')
+    Message.warning('请先填写窗口名称')
     return
   }
-  
+
   // 验证通过，允许跳转
   currentStep.value = index
 }
@@ -91,7 +94,10 @@ const goToStep = async (index: number) => {
 const handleClose = () => {
   emit('update:visible', false)
   setTimeout(() => {
-    resetForm()
+    // 如果抽屉已经重新打开，不要重置表单（避免清空新加载的数据）
+    if (!props.visible) {
+      resetForm()
+    }
   }, 300)
 }
 
@@ -103,7 +109,7 @@ const handleNext = async () => {
       await basicFormRef.value?.validate()
       nextStep()
     } catch (error) {
-      ElMessage.warning('请填写必填项')
+      Message.warning('请填写必填项')
     }
   } else {
     nextStep()
@@ -119,57 +125,79 @@ const handlePrev = () => {
 const handleSave = async () => {
   try {
     loading.value = true
-    
+
     // 检查指纹黑名单字段
     if (formData.value.fingerprint) {
       const blacklistFields = detectFingerprintBlacklist(formData.value.fingerprint as any)
       if (blacklistFields.length > 0) {
-        ElMessage.error(`检测到危险字段：${blacklistFields.join(', ')}，已自动过滤`)
+        Message.error(`检测到危险字段：${blacklistFields.join(', ')}，已自动过滤`)
       }
-      
+
       // 过滤指纹字段，只保留白名单
       formData.value.fingerprint = filterFingerprintWhitelist(formData.value.fingerprint as any) as any
     }
-    
+
     if (isEditMode.value && props.profile) {
-      // 编辑模式 - 使用 patch merge
-      
-      // 计算指纹字段的变更
+      // 编辑模式 - 增量更新，只提交有变化的字段
+
+      // 检查指纹是否有变更
       const fingerprintPatch = calculateFingerprintPatch(
         originalFingerprint.value,
         formData.value.fingerprint
       )
-      
-      // 构建更新数据
-      const updateData: any = {
-        name: formData.value.name,
-        group: formData.value.group,
-        remark: formData.value.remark,
+
+      // 构建更新数据 - 只添加有变化的字段
+      const updateData: any = {}
+
+      // 检查名称是否有变化
+      if (formData.value.name !== originalName.value) {
+        updateData.name = formData.value.name
+        console.log('[Update] 名称有变化:', originalName.value, '->', formData.value.name)
       }
-      
-      // 只有指纹有变更时才提交（patch）
+
+      // 检查分组是否有变化
+      if (formData.value.group !== originalGroup.value) {
+        updateData.group = formData.value.group
+        console.log('[Update] 分组有变化:', originalGroup.value, '->', formData.value.group)
+      }
+
+      // 检查备注是否有变化
+      if (formData.value.remark !== originalRemark.value) {
+        updateData.remark = formData.value.remark
+        console.log('[Update] 备注有变化')
+      }
+
+      // 如果指纹有变更，提交完整的指纹数据（后端需要完整结构）
       if (fingerprintPatch) {
-        updateData.fingerprint = fingerprintPatch
-        console.log('[Fingerprint Patch]', fingerprintPatch)
+        // 提交完整的 fingerprint，不是 patch
+        updateData.fingerprint = formData.value.fingerprint
+        console.log('[Fingerprint Update] 提交完整指纹数据')
       }
-      
+
       // proxy相关（暂时全量提交）
       if (formData.value.proxy) {
         updateData.proxy = formData.value.proxy
       }
-      
+
+      // 检查是否有任何变化
+      if (Object.keys(updateData).length === 0) {
+        Message.info('没有修改内容')
+        handleClose()
+        return
+      }
+
       await profileStore.updateProfile(props.profile.id, updateData)
-      ElMessage.success('环境更新成功（增量更新）')
+      // 注意：不在这里显示成功消息，eventListener.ts 会监听 profile:updated 事件并显示
     } else {
       // 创建模式
       await profileStore.createProfile(formData.value)
-      ElMessage.success('环境创建成功')
+      // 注意：不在这里显示成功消息，eventListener.ts 会监听 profile:created 事件并显示
     }
-    
+
     emit('success')
     handleClose()
   } catch (error: any) {
-    ElMessage.error(error.message || '操作失败')
+    Message.error(error.message || '操作失败')
   } finally {
     loading.value = false
   }
@@ -237,38 +265,32 @@ watch(() => props.profile, (newProfile) => {
       basicSettings: newProfile.basicSettings || { ...defaultBasicSettings },
       preferences: newProfile.preferences || { ...defaultPreferences },
     }
-    // 保存原始指纹数据（用于 diff）
+    // 保存原始数据（用于 diff）
     originalFingerprint.value = JSON.parse(JSON.stringify(newProfile.fingerprint || {}))
+    originalName.value = newProfile.name || ''
+    originalGroup.value = newProfile.group || ''
+    originalRemark.value = newProfile.remark || ''
+    console.log('[Edit] 加载窗口数据:', newProfile.name)
   }
 }, { immediate: true })
 </script>
 
 <template>
-  <el-drawer
-    :model-value="visible"
-    @update:model-value="emit('update:visible', $event)"
-    :title="isEditMode ? '编辑窗口' : '新建窗口'"
-    size="600px"
-    :close-on-click-modal="false"
-    class="native-drawer"
-    @close="handleClose"
-  >
+  <el-drawer :model-value="visible" @update:model-value="emit('update:visible', $event)"
+    :title="isEditMode ? '编辑窗口' : '新建窗口'" size="600px" :close-on-click-modal="false" class="native-drawer"
+    @close="handleClose">
     <div class="drawer-content">
       <!-- 步骤指示器 - 可点击 -->
       <div class="steps-wrapper">
-        <div 
-          v-for="(step, index) in steps" 
-          :key="index"
-          class="step-item"
-          :class="{ 
-            active: currentStep === index,
-            completed: currentStep > index,
-            clickable: index === 0 || isBasicInfoValid
-          }"
-          @click="goToStep(index)"
-        >
+        <div v-for="(step, index) in steps" :key="index" class="step-item" :class="{
+          active: currentStep === index,
+          completed: currentStep > index,
+          clickable: index === 0 || isBasicInfoValid
+        }" @click="goToStep(index)">
           <div class="step-indicator">
-            <el-icon v-if="currentStep > index" class="check-icon"><Check /></el-icon>
+            <el-icon v-if="currentStep > index" class="check-icon">
+              <Check />
+            </el-icon>
             <span v-else class="step-number">{{ index + 1 }}</span>
           </div>
           <span class="step-title">{{ step.title }}</span>
@@ -280,10 +302,7 @@ watch(() => props.profile, (newProfile) => {
       <div class="form-container">
         <!-- 第1步：窗口信息 -->
         <div v-show="currentStep === 0" class="form-section">
-          <BasicInfoForm
-            ref="basicFormRef"
-            v-model="formData"
-          />
+          <BasicInfoForm ref="basicFormRef" v-model="formData" />
         </div>
 
         <!-- 第2步：基础设置 -->
@@ -293,17 +312,14 @@ watch(() => props.profile, (newProfile) => {
 
         <!-- 第3步：高级指纹设置 -->
         <div v-show="currentStep === 2" class="form-section">
-          <AdvancedFingerprintForm
-            v-model="formData"
-            @regenerate="regenerateFingerprint"
-          />
+          <AdvancedFingerprintForm v-model="formData" @regenerate="regenerateFingerprint" />
         </div>
 
         <!-- 第4步：代理设置 -->
         <div v-show="currentStep === 3" class="form-section">
           <ProxyForm v-model="formData" />
         </div>
-        
+
         <!-- 第5步：偏好设置 -->
         <div v-show="currentStep === 4" class="form-section">
           <PreferencesForm v-model="formData.preferences!" />
@@ -316,24 +332,21 @@ watch(() => props.profile, (newProfile) => {
       <div class="drawer-footer">
         <button class="footer-btn cancel" @click="handleClose">取消</button>
         <button v-if="currentStep > 0" class="footer-btn secondary" @click="handlePrev">
-          <el-icon><ArrowLeft /></el-icon>
+          <el-icon>
+            <ArrowLeft />
+          </el-icon>
           <span>上一步</span>
         </button>
-        <button
-          v-if="currentStep < 4"
-          class="footer-btn primary"
-          @click="handleNext"
-        >
+        <button v-if="currentStep < 4" class="footer-btn primary" @click="handleNext">
           <span>下一步</span>
-          <el-icon><ArrowRight /></el-icon>
+          <el-icon>
+            <ArrowRight />
+          </el-icon>
         </button>
-        <button
-          v-else
-          class="footer-btn primary"
-          :disabled="loading"
-          @click="handleSave"
-        >
-          <el-icon v-if="loading" class="is-loading"><Loading /></el-icon>
+        <button v-else class="footer-btn primary" :disabled="loading" @click="handleSave">
+          <el-icon v-if="loading" class="is-loading">
+            <Loading />
+          </el-icon>
           <span>{{ isEditMode ? '保存更改' : '创建环境' }}</span>
         </button>
       </div>
@@ -368,25 +381,25 @@ watch(() => props.profile, (newProfile) => {
   position: relative;
   flex: 1;
   transition: all var(--duration-fast) var(--ease-out-quart);
-  
+
   // 可点击样式
   &.clickable {
     cursor: pointer;
-    
+
     &:hover {
       .step-indicator {
         transform: scale(1.1);
         box-shadow: 0 2px 8px rgba(22, 119, 255, 0.3);
       }
     }
-    
+
     &:active {
       .step-indicator {
         transform: scale(0.95);
       }
     }
   }
-  
+
   // 圆形指示器
   .step-indicator {
     width: 36px;
@@ -403,7 +416,7 @@ watch(() => props.profile, (newProfile) => {
     transition: all var(--duration-fast) var(--ease-out-quart);
     z-index: 2;
   }
-  
+
   // 步骤标题
   .step-title {
     font-size: var(--text-sm);
@@ -412,7 +425,7 @@ watch(() => props.profile, (newProfile) => {
     transition: color var(--duration-fast);
     white-space: nowrap;
   }
-  
+
   // 连接线（绝对定位）
   .step-connector {
     position: absolute;
@@ -424,12 +437,12 @@ watch(() => props.profile, (newProfile) => {
     transition: background var(--duration-fast);
     z-index: 1;
   }
-  
+
   // 最后一个步骤无连接线
   &:last-child .step-connector {
     display: none;
   }
-  
+
   // 激活状态
   &.active {
     .step-indicator {
@@ -437,28 +450,28 @@ watch(() => props.profile, (newProfile) => {
       color: white;
       box-shadow: 0 4px 12px rgba(22, 119, 255, 0.3);
     }
-    
+
     .step-title {
       color: var(--color-accent-blue); // 蓝色文字
       font-weight: var(--font-semibold);
     }
   }
-  
+
   // 已完成状态
   &.completed {
     .step-indicator {
       background: var(--color-accent-blue);
       color: white;
     }
-    
+
     .step-title {
       color: var(--color-text-primary); // 深色文字
     }
-    
+
     .step-connector {
       background: var(--color-accent-blue); // 蓝色连接线
     }
-    
+
     .check-icon {
       font-size: 16px;
     }
@@ -471,20 +484,20 @@ watch(() => props.profile, (newProfile) => {
   overflow-y: auto;
   padding: 0;
   background: white;
-  
+
   // 自定义滚动条
   &::-webkit-scrollbar {
     width: 6px;
   }
-  
+
   &::-webkit-scrollbar-track {
     background: transparent;
   }
-  
+
   &::-webkit-scrollbar-thumb {
     background: rgba(0, 0, 0, 0.1);
     border-radius: 3px;
-    
+
     &:hover {
       background: rgba(0, 0, 0, 0.2);
     }
@@ -500,6 +513,7 @@ watch(() => props.profile, (newProfile) => {
     opacity: 0;
     transform: translateY(10px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -531,61 +545,61 @@ watch(() => props.profile, (newProfile) => {
   font-weight: var(--font-medium);
   cursor: pointer;
   transition: all var(--duration-fast) var(--ease-out-quart);
-  
+
   .el-icon {
     font-size: 14px;
   }
-  
+
   // 取消按钮（灰色边框）
   &.cancel {
     background: white;
     color: var(--color-text-secondary);
     border: 1px solid #D9D9D9;
-    
+
     &:hover {
       background: #FAFAFA;
       border-color: #999;
       color: var(--color-text-primary);
     }
-    
+
     &:active {
       transform: scale(0.98);
     }
   }
-  
+
   // 上一步按钮
   &.secondary {
     background: white;
     color: var(--color-text-primary);
     border: 1px solid #D9D9D9;
-    
+
     &:hover {
       background: #FAFAFA;
       border-color: #999;
     }
-    
+
     &:active {
       transform: scale(0.98);
     }
   }
-  
+
   // 下一步/完成按钮（蓝色）
   &.primary {
     background: var(--color-accent-blue);
     color: white;
     box-shadow: 0 2px 6px rgba(22, 119, 255, 0.3);
     min-width: 100px;
-    
+
     &:hover:not(:disabled) {
       background: var(--color-accent-blue-hover);
       transform: translateY(-1px);
       box-shadow: 0 4px 12px rgba(22, 119, 255, 0.4);
     }
-    
+
     &:active:not(:disabled) {
       transform: translateY(0);
     }
-    
+
     &:disabled {
       opacity: 0.6;
       cursor: not-allowed;
@@ -600,17 +614,17 @@ watch(() => props.profile, (newProfile) => {
   padding: var(--spacing-lg) var(--spacing-2xl);
   border-bottom: 1px solid #E5E5E5;
   background: white;
-  
+
   .el-drawer__title {
     font-size: var(--text-xl);
     font-weight: var(--font-semibold);
     color: var(--color-text-primary);
   }
-  
+
   .el-drawer__close-btn {
     color: var(--color-text-tertiary);
     font-size: 20px;
-    
+
     &:hover {
       color: var(--color-text-primary);
     }

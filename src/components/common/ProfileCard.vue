@@ -5,14 +5,29 @@
  */
 
 import type { Profile } from '@/types'
+import { useGroupStore } from '@/stores/groupStore'
+import { computed } from 'vue'
 
 interface Props {
   profile: Profile
   selected?: boolean
 }
 
-withDefaults(defineProps<Props>(), {
+const props = withDefaults(defineProps<Props>(), {
   selected: false,
+})
+
+// 获取分组 Store
+const groupStore = useGroupStore()
+
+// 根据分组 ID 获取分组名称
+const getGroupName = computed(() => {
+  const groupId = props.profile.group
+  if (!groupId || groupId === 'default') {
+    return '默认分组'
+  }
+  const group = groupStore.groups.find(g => g.id === groupId)
+  return group?.name || groupId
 })
 
 const emit = defineEmits<{
@@ -81,7 +96,7 @@ const statusMap = {
       </div>
       <div class="detail-item">
         <span class="detail-label">分组</span>
-        <span class="detail-value">{{ profile.group || '默认' }}</span>
+        <span class="detail-value">{{ getGroupName }}</span>
       </div>
       <div class="detail-item">
         <span class="detail-label">更新</span>

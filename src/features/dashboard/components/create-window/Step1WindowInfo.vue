@@ -3,16 +3,18 @@
  * @description 步骤1 - 窗口信息
  */
 
+import { onMounted } from 'vue'
+import { useGroupStore } from '@/stores/groupStore'
+
 const model = defineModel<any>({ required: true })
 
-// 分组选项
-const groupOptions = [
-  { value: 'default', label: '默认分组' },
-  { value: 'ecommerce', label: '电商核心组' },
-  { value: 'social', label: '社媒推广组' },
-  { value: 'video', label: '短视频矩阵' },
-  { value: 'payment', label: '支付账号' }
-]
+// 获取分组 Store
+const groupStore = useGroupStore()
+
+// 初始化分组数据
+onMounted(() => {
+  groupStore.initGroups()
+})
 </script>
 
 <template>
@@ -39,7 +41,7 @@ const groupOptions = [
         <div class="form-control">
           <div class="select-wrapper">
             <select v-model="model.groupId" class="select">
-              <option v-for="opt in groupOptions" :key="opt.value" :value="opt.value">
+              <option v-for="opt in groupStore.groupOptions" :key="opt.value" :value="opt.value">
                 {{ opt.label }}
               </option>
             </select>

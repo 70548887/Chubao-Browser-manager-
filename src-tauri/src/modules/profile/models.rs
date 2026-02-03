@@ -43,6 +43,55 @@ pub struct Fingerprint {
     pub canvas_noise: bool,
     pub webgl_noise: bool,
     pub audio_noise: bool,
+
+    // --- 新增字段，与前端 FingerprintConfig 对齐 ---
+    pub navigator_platform: Option<String>,
+    pub os_version: Option<String>,
+    pub browser_version: Option<String>,
+    pub screen_width: Option<u32>,
+    pub screen_height: Option<u32>,
+    pub resolution: Option<String>,
+    pub fonts: Option<Vec<String>>,
+    pub webrtc: Option<String>, // 'real' | 'fake' | 'disabled'
+    pub webrtc_public_ip: Option<String>,
+    pub webrtc_local_ip: Option<String>,
+    pub webgl_image: Option<String>,
+    pub webgl_vendor: Option<String>,
+    pub webgl_renderer: Option<String>,
+    pub webgpu: Option<bool>,
+    pub canvas: Option<String>, // 'noise' | 'block' | 'off'
+    pub audio_context: Option<String>, // 'noise' | 'block' | 'off'
+    pub speech_voices: Option<Vec<String>>,
+    pub do_not_track: Option<String>, // '1' | '0' | 'unspecified'
+    pub client_rects: Option<bool>,
+    pub media_devices: Option<String>, // 'real' | 'fake' | 'disabled'
+    pub device_name: Option<String>,
+    pub mac_address: Option<String>,
+    pub ssl_fingerprint: Option<String>,
+    pub port_scan_protection: Option<bool>,
+    pub port_scan_whitelist: Option<String>,
+    pub custom_fonts: Option<Vec<String>>,
+    pub ignore_cert_errors: Option<bool>,
+    pub custom_plugins: Option<bool>,
+    pub cloudflare_optimize: Option<bool>,
+    pub hardware_acceleration: Option<bool>,
+    pub disable_sandbox: Option<bool>,
+    pub launch_args: Option<String>,
+    
+    // --- 字体配置 ---
+    pub fonts_mode: Option<String>,       // 'subset' | 'real' | 'custom' | 'random'
+    pub fonts_list: Option<Vec<String>>,  // 选中的字体列表
+    
+    // --- Variations 配置 ---
+    pub variations_enabled: Option<bool>,
+    pub variations_seed_id: Option<String>,
+    
+    // --- 地理位置配置 ---
+    pub geolocation_mode: Option<String>,      // 'auto' | 'custom' | 'disabled'
+    pub geolocation_latitude: Option<f64>,
+    pub geolocation_longitude: Option<f64>,
+    pub geolocation_accuracy: Option<f64>,
+    pub geolocation_prompt: Option<String>,    // 'ask' | 'allow' | 'block'
 }
 
 /// 偏好设置配置
@@ -51,7 +100,15 @@ pub struct PreferencesConfig {
     // 扩展管理
     #[serde(default)]
     pub extensions: Vec<String>,
+    #[serde(default)]
+    pub custom_extensions: Vec<String>,
     
+    // 启动设置
+    pub window_name: Option<bool>,
+    pub custom_bookmarks: Option<bool>,
+    pub startup_page: Option<String>, // 'blank' | 'url'
+    pub startup_url: Option<String>,
+
     // 退出自动清理
     #[serde(default)]
     pub clear_history_on_exit: bool,

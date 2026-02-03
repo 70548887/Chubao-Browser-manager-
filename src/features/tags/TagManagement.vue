@@ -11,6 +11,9 @@ import { useTagManagement } from './composables/useTagManagement'
 const {
   // 状态
   isLoading,
+  currentPage,
+  pageSize,
+  pageSizes,
   dialogVisible,
   dialogTitle,
   sortBy,
@@ -21,6 +24,7 @@ const {
   filteredTags,
   paginatedTags,
   isAllSelected,
+  totalCount,
   
   // 常量
   colorOptions,
@@ -170,6 +174,27 @@ onUnmounted(() => {
             <span class="material-symbols-outlined">add</span>
             <span>创建第一个标签</span>
           </button>
+        </div>
+      </div>
+
+      <!-- 分页区域 -->
+      <div v-if="totalCount > 0" class="pagination-bar">
+        <div class="page-info">
+          显示 {{ (currentPage - 1) * pageSize + 1 }} 到 {{ Math.min(currentPage * pageSize, totalCount) }} 条，共 <strong>{{ totalCount }}</strong> 条
+        </div>
+        <div class="page-controls">
+          <el-select v-model="pageSize" size="small" class="size-select">
+            <el-option v-for="size in pageSizes" :key="size" :label="size + ' / 页'" :value="size" />
+          </el-select>
+          <el-pagination
+            v-model:current-page="currentPage"
+            :page-size="pageSize"
+            :total="totalCount"
+            :pager-count="5"
+            layout="prev, pager, next"
+            background
+            size="small"
+          />
         </div>
       </div>
 
@@ -834,5 +859,36 @@ onUnmounted(() => {
   border: 1px solid #cbd5e1;
   cursor: pointer;
   accent-color: #2563eb;
+}
+
+// 分页栏
+.pagination-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  background: var(--color-bg-elevated);
+  border-top: 1px solid var(--color-border);
+  border-radius: 0 0 12px 12px;
+}
+
+.page-info {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  
+  strong {
+    color: var(--color-text-primary);
+    font-weight: 600;
+  }
+}
+
+.page-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  
+  .size-select {
+    width: 100px;
+  }
 }
 </style>

@@ -3,13 +3,14 @@
  * @author DeepAgent
  */
 
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { useProfileStore } from '@/stores/profile.store'
 import { useGroupStore } from '@/stores/groupStore'
 import { useUIStore } from '@/stores/ui.store'
 import type { Profile } from '@/types/profile.types'
 import type { BatchResult } from '@/types'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessageBox } from 'element-plus'
+import { Message } from '@/utils/message'
 import { getSettingValue } from '@/api/settingsApi'
 import { arrangeWindowsGrid } from '@/api/profileApi'
 
@@ -62,7 +63,7 @@ export function useDashboard(navigateTo?: (page: string) => void) {
       const kernelPath = await getSettingValue('kernel_path')
       if (!kernelPath) {
         const result = await ElMessageBox.confirm(
-          '浏览器内核路径未设置，无法启动环境。是否前往设置页面？',
+          '浏览器内核路径未设置，无法启动窗口。是否前往设置页面？',
           '配置提示',
           {
             type: 'warning',
@@ -78,7 +79,7 @@ export function useDashboard(navigateTo?: (page: string) => void) {
       return true
     } catch (e: any) {
       if (e === 'cancel') return false
-      ElMessage.error('检查系统设置失败')
+      Message.error('检查系统设置失败')
       return false
     }
   }
@@ -189,42 +190,45 @@ export function useDashboard(navigateTo?: (page: string) => void) {
     
     try {
       await profileStore.startProfile(id)
-      ElMessage.success('启动成功')
+      Message.success('启动成功')
     } catch (e: any) {
-      ElMessage.error(e.message || '启动失败')
+      Message.error(e.message || '启动失败')
     }
   }
 
   const handleStop = async (id: string) => {
     try {
       await profileStore.stopProfile(id)
-      ElMessage.success('停止成功')
+      Message.success('停止成功')
     } catch (e: any) {
-      ElMessage.error(e.message || '停止失败')
+      Message.error(e.message || '停止失败')
     }
   }
 
-  const handleEdit = (profile: Profile) => {
+  const handleEdit = async (profile: Profile) => {
     // 运行中的窗口不允许编辑
     if (profile.status === 'running') {
-      ElMessage.warning('窗口运行中，请先停止后再编辑')
+      Message.warning('窗口运行中，请先停止后再编辑')
       return
     }
+    // 先设置数据
     editingProfile.value = profile
+    // 等待 Vue 响应式更新完成后再打开抽屉，避免竞态问题
+    await nextTick()
     drawerVisible.value = true
   }
 
   const handleDelete = async (id: string) => {
     try {
-      await ElMessageBox.confirm('确定要删除此环境吗？', '删除确认', {
+      await ElMessageBox.confirm('确定要删除此窗口吗？', '删除确认', {
         type: 'warning',
       })
       await profileStore.deleteProfile(id)
       selectedIds.value.delete(id)
-      ElMessage.success('删除成功')
+      // 注意：不在这里显示成功消息，eventListener.ts 会监听 profile:deleted 事件并显示
     } catch (e: any) {
       if (e !== 'cancel') {
-        ElMessage.error('删除失败')
+        Message.error('删除失败')
       }
     }
   }
@@ -254,20 +258,19 @@ export function useDashboard(navigateTo?: (page: string) => void) {
       }
       
       await profileStore.updateProfile(editingProfile.value.id, updateData)
-      ElMessage.success('更新成功')
       drawerVisible.value = false
       editingProfile.value = undefined
       await profileStore.fetchProfiles()
     } catch (error: any) {
       console.error('更新失败:', error)
-      ElMessage.error(error.message || '更新失败')
+      Message.error(error.message || '更新失败')
     }
   }
 
   // ==================== 批量操作 ====================
   const handleBatchLaunch = async () => {
     if (selectedIds.value.size === 0) {
-      ElMessage.warning('请先选择环境')
+      Message.warning('请先选择窗口')
       return
     }
     
@@ -283,16 +286,16 @@ export function useDashboard(navigateTo?: (page: string) => void) {
         batchResultData.value = result
         batchResultVisible.value = true
       } else {
-        ElMessage.success(`批量启动成功（${result.successCount} 个环境）`)
+        Message.success(`批量启动成功（${result.successCount} 个窗口）`)
       }
     } catch (e: any) {
-      ElMessage.error(e.message || '批量启动失败')
+      Message.error(e.message || '批量启动失败')
     }
   }
 
   const handleBatchStop = async () => {
     if (selectedIds.value.size === 0) {
-      ElMessage.warning('请先选择环境')
+      Message.warning('请先选择窗口')
       return
     }
     try {
@@ -304,22 +307,22 @@ export function useDashboard(navigateTo?: (page: string) => void) {
         batchResultData.value = result
         batchResultVisible.value = true
       } else {
-        ElMessage.success(`批量停止成功（${result.successCount} 个环境）`)
+        Message.success(`批量停止成功（${result.successCount} 个窗口）`)
       }
     } catch (e: any) {
-      ElMessage.error(e.message || '批量停止失败')
+      Message.error(e.message || '批量停止失败')
     }
   }
 
   const handleBatchDelete = async () => {
     if (selectedIds.value.size === 0) {
-      ElMessage.warning('请先选择环境')
+      Message.warning('请先选择窗口')
       return
     }
     
     try {
       await ElMessageBox.confirm(
-        `确定要删除选中的 ${selectedIds.value.size} 个环境吗？此操作不可恢复。`,
+        `确定要删除选中的 ${selectedIds.value.size} 个窗口吗？此操作不可恢复。`,
         '批量删除确认',
         {
           type: 'warning',
@@ -339,18 +342,18 @@ export function useDashboard(navigateTo?: (page: string) => void) {
         batchResultData.value = result
         batchResultVisible.value = true
       } else {
-        ElMessage.success(`批量删除成功（${result.successCount} 个环境）`)
+        Message.success(`批量删除成功（${result.successCount} 个窗口）`)
       }
     } catch (e: any) {
       if (e !== 'cancel') {
-        ElMessage.error(e.message || '批量删除失败')
+        Message.error(e.message || '批量删除失败')
       }
     }
   }
 
   const handleBatchMoveGroup = () => {
     if (selectedIds.value.size === 0) {
-      ElMessage.warning('请先选择环境')
+      Message.warning('请先选择窗口')
       return
     }
     moveGroupDialogVisible.value = true
@@ -359,7 +362,7 @@ export function useDashboard(navigateTo?: (page: string) => void) {
 
   const confirmMoveGroup = async () => {
     if (!targetGroupId.value) {
-      ElMessage.warning('请选择目标分组')
+      Message.warning('请选择目标分组')
       return
     }
     
@@ -375,23 +378,23 @@ export function useDashboard(navigateTo?: (page: string) => void) {
         batchResultData.value = result
         batchResultVisible.value = true
       } else {
-        ElMessage.success(`批量移动成功（${result.successCount} 个环境）`)
+        Message.success(`批量移动成功（${result.successCount} 个窗口）`)
         await groupStore.initGroups()
       }
     } catch (e: any) {
-      ElMessage.error(e.message || '批量移动分组失败')
+      Message.error(e.message || '批量移动分组失败')
     }
   }
 
   const handleBatchDuplicate = async () => {
     if (selectedIds.value.size === 0) {
-      ElMessage.warning('请先选择环境')
+      Message.warning('请先选择窗口')
       return
     }
     
     try {
       await ElMessageBox.confirm(
-        `确定要复制选中的 ${selectedIds.value.size} 个环境吗？`,
+        `确定要复制选中的 ${selectedIds.value.size} 个窗口吗？`,
         '批量复制确认',
         {
           type: 'info',
@@ -410,11 +413,11 @@ export function useDashboard(navigateTo?: (page: string) => void) {
         batchResultData.value = result
         batchResultVisible.value = true
       } else {
-        ElMessage.success(`批量复制成功（${result.successCount} 个环境）`)
+        Message.success(`批量复制成功（${result.successCount} 个窗口）`)
       }
     } catch (e: any) {
       if (e !== 'cancel') {
-        ElMessage.error(e.message || '批量复制失败')
+        Message.error(e.message || '批量复制失败')
       }
     }
   }
@@ -440,11 +443,91 @@ export function useDashboard(navigateTo?: (page: string) => void) {
     await groupStore.initGroups()
   }
 
+  // ==================== 单个窗口操作 ====================
+  
+  // 克隆窗口
+  const handleClone = async (id: string) => {
+    try {
+      const result = await profileStore.duplicateProfiles([id])
+      if (result.successCount > 0) {
+        Message.success('克隆成功')
+      } else {
+        Message.error(result.results[0]?.error || '克隆失败')
+      }
+    } catch (e: any) {
+      Message.error(e.message || '克隆失败')
+    }
+  }
+  
+  // 导出窗口配置
+  const handleExport = async (id: string) => {
+    try {
+      const profile = profiles.value.find(p => p.id === id)
+      if (!profile) {
+        Message.error('窗口不存在')
+        return
+      }
+      
+      // 构建导出数据
+      const exportData = {
+        name: profile.name,
+        group: profile.group,
+        remark: profile.remark,
+        fingerprint: profile.fingerprint,
+        proxy: profile.proxy,
+        preferences: profile.preferences,
+        exportedAt: new Date().toISOString(),
+        version: '1.0',
+      }
+      
+      // 创建并下载 JSON 文件
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `${profile.name.replace(/[^a-zA-Z0-9\u4e00-\u9fa5-_]/g, '_')}_${Date.now()}.json`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+      
+      Message.success('导出成功')
+    } catch (e: any) {
+      Message.error(e.message || '导出失败')
+    }
+  }
+  
+  // 导出 Cookie
+  const handleExportCookie = async (id: string) => {
+    try {
+      const profile = profiles.value.find(p => p.id === id)
+      if (!profile) {
+        Message.error('窗口不存在')
+        return
+      }
+      
+      // TODO: 实际的 Cookie 需要从浏览器数据目录中读取
+      Message.warning('Cookie 导出功能开发中...')
+    } catch (e: any) {
+      Message.error(e.message || '导出 Cookie 失败')
+    }
+  }
+  
+  // 清空窗口缓存
+  const handleClearCache = async (id: string) => {
+    try {
+      // TODO: 调用后端 API 清除缓存
+      Message.warning('清空缓存功能开发中...')
+    } catch (e: any) {
+      Message.error(e.message || '清空缓存失败')
+    }
+  }
+
   // ==================== 窗口排列 ====================
   const handleArrangeWindows = async () => {
     const runningProfiles = profiles.value.filter(p => p.status === 'running')
     if (runningProfiles.length === 0) {
-      ElMessage.warning('没有运行中的窗口')
+      Message.warning('没有运行中的窗口')
       return
     }
     
@@ -453,9 +536,9 @@ export function useDashboard(navigateTo?: (page: string) => void) {
       const count = runningProfiles.length
       const columns = count <= 2 ? count : count <= 4 ? 2 : count <= 9 ? 3 : 4
       await arrangeWindowsGrid(columns)
-      ElMessage.success(`已排列 ${count} 个窗口`)
+      Message.success(`已排列 ${count} 个窗口`)
     } catch (e: any) {
-      ElMessage.error(e.message || '排列窗口失败')
+      Message.error(e.message || '排列窗口失败')
     }
   }
 
@@ -509,6 +592,10 @@ export function useDashboard(navigateTo?: (page: string) => void) {
     confirmMoveGroup,
     handleBatchDuplicate,
     handleBatchCommand,
+    handleClone,
+    handleExport,
+    handleExportCookie,
+    handleClearCache,
     handleArrangeWindows,
     initDashboard,
   }

@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core'
-import type { Profile, CreateProfileDTO, UpdateProfileDTO, FingerprintConfig, ProxyConfig } from '@/types'
+import type { Profile, CreateProfileDTO, UpdateProfileDTO, FingerprintConfig, ProxyConfig, PreferencesConfig } from '@/types'
 
 /**
  * Profile 数据类型（后端返回）
@@ -27,29 +27,109 @@ function fingerprintFromDto(fp: any): FingerprintConfig | undefined {
         seed: fp.seed,
         platform: fp.platform,
         browser: fp.browser,
-        userAgent: fp.user_agent,  // snake_case → camelCase
+        userAgent: fp.user_agent,
+        navigatorPlatform: fp.navigator_platform,
+        osVersion: fp.os_version,
+        browserVersion: fp.browser_version,
         hardwareConcurrency: fp.hardware_concurrency,
         deviceMemory: fp.device_memory,
         screenResolution: fp.screen_resolution,
+        screenWidth: fp.screen_width,
+        screenHeight: fp.screen_height,
         timezone: fp.timezone,
         language: fp.language,
         canvasNoise: fp.canvas_noise,
         webglNoise: fp.webgl_noise,
         audioNoise: fp.audio_noise,
-        // 高级字段（如果存在）
-        canvas: 'noise',
-        audioContext: 'noise',
-        webrtc: 'real',
-        webglVendor: 'Intel Inc.',
-        webglRenderer: 'Intel Iris OpenGL Engine',
-        webgpu: true,
-        doNotTrack: 'unspecified',
-        clientRects: true,
-        mediaDevices: 'real',
-        portScanProtection: true,
-        hardwareAcceleration: true,
-        disableSandbox: false,
+        
+        // 高级字段
+        resolution: fp.resolution,
+        fonts: fp.fonts,
+        webrtc: fp.webrtc || 'disabled',
+        webrtcPublicIp: fp.webrtc_public_ip,
+        webrtcLocalIp: fp.webrtc_local_ip,
+        webglImage: fp.webgl_image,
+        webglVendor: fp.webgl_vendor || 'Intel Inc.',
+        webglRenderer: fp.webgl_renderer || 'Intel Iris OpenGL Engine',
+        webgpu: fp.webgpu ?? true,
+        canvas: fp.canvas || (fp.canvas_noise ? 'noise' : 'off'),
+        audioContext: fp.audio_context || (fp.audio_noise ? 'noise' : 'off'),
+        speechVoices: fp.speech_voices,
+        doNotTrack: fp.do_not_track || 'unspecified',
+        clientRects: fp.client_rects ?? true,
+        mediaDevices: fp.media_devices || 'real',
+        deviceName: fp.device_name,
+        macAddress: fp.mac_address,
+        sslFingerprint: fp.ssl_fingerprint,
+        portScanProtection: fp.port_scan_protection ?? true,
+        portScanWhitelist: fp.port_scan_whitelist,
+        customFonts: fp.custom_fonts,
+        ignoreCertErrors: fp.ignore_cert_errors ?? false,
+        customPlugins: fp.custom_plugins ?? false,
+        cloudflareOptimize: fp.cloudflare_optimize ?? false,
+        hardwareAcceleration: fp.hardware_acceleration ?? true,
+        disableSandbox: fp.disable_sandbox ?? false,
+        launchArgs: fp.launch_args,
+        
+        // 字体配置
+        fontsMode: fp.fonts_mode ?? 'subset',
+        fontsList: fp.fonts_list ?? [],
+        
+        // Variations 配置
+        variationsEnabled: fp.variations_enabled ?? true,
+        variationsSeedId: fp.variations_seed_id ?? '',
+        
+        // 地理位置配置
+        geolocationMode: fp.geolocation_mode ?? 'disabled',
+        geolocationLatitude: fp.geolocation_latitude ?? undefined,
+        geolocationLongitude: fp.geolocation_longitude ?? undefined,
+        geolocationAccuracy: fp.geolocation_accuracy ?? undefined,
+        geolocationPrompt: fp.geolocation_prompt ?? 'ask',
     } as FingerprintConfig
+}
+
+/**
+ * 将后端 Preferences 转换为前端格式（snake_case → camelCase）
+ */
+function preferencesFromDto(pref: any): PreferencesConfig | undefined {
+    if (!pref) return undefined
+    
+    return {
+        windowName: pref.window_name ?? false,
+        customBookmarks: pref.custom_bookmarks ?? false,
+        extensions: pref.extensions || [],
+        customExtensions: pref.custom_extensions || [],
+        startupPage: pref.startup_page || 'blank',
+        startupUrl: pref.startup_url,
+        syncBookmarks: pref.sync_bookmarks ?? false,
+        syncHistory: pref.sync_history ?? false,
+        syncTabs: pref.sync_tabs ?? false,
+        syncCookies: pref.sync_cookies ?? false,
+        syncExtensions: pref.sync_extensions ?? false,
+        syncPasswords: pref.sync_passwords ?? false,
+        syncIndexedDB: pref.sync_indexed_db ?? false,
+        syncLocalStorage: pref.sync_local_storage ?? false,
+        syncSessionStorage: pref.sync_session_storage ?? false,
+        clearCacheOnStart: pref.clear_cache_on_start ?? false,
+        clearCookiesOnStart: pref.clear_cookies_on_start ?? false,
+        clearLocalStorageOnStart: pref.clear_local_storage_on_start ?? false,
+        clearHistoryOnExit: pref.clear_history_on_exit ?? false,
+        clearCookiesOnExit: pref.clear_cookies_on_exit ?? false,
+        clearCacheOnExit: pref.clear_cache_on_exit ?? false,
+        cloudSync: pref.cloud_sync ?? false,
+        cloudSyncExtensions: pref.cloud_sync_extensions ?? false,
+        cloudSyncBookmarks: pref.cloud_sync_bookmarks ?? false,
+        randomFingerprintOnStart: pref.random_fingerprint_on_start ?? false,
+        showPasswordSavePrompt: pref.show_password_save_prompt ?? false,
+        stopOnNetworkError: pref.stop_on_network_error ?? false,
+        stopOnIpChange: pref.stop_on_ip_change ?? false,
+        stopOnCountryChange: pref.stop_on_country_change ?? false,
+        openWorkbench: pref.open_workbench ?? false,
+        ipChangeNotification: pref.ip_change_notification ?? false,
+        enableGoogleLogin: pref.enable_google_login ?? false,
+        urlBlacklist: pref.url_blacklist,
+        urlWhitelist: pref.url_whitelist,
+    } as PreferencesConfig
 }
 
 /**
@@ -89,7 +169,7 @@ function dtoToProfile(dto: ProfileDto): Profile {
             disableSandbox: false,
         } as FingerprintConfig,
         proxy: dto.proxy as ProxyConfig,
-        preferences: dto.preferences as any,
+        preferences: preferencesFromDto(dto.preferences),
         createdAt: new Date(dto.created_at).getTime(),
         updatedAt: new Date(dto.updated_at).getTime(),
     }
@@ -122,89 +202,187 @@ export async function getProfile(id: string): Promise<Profile> {
 }
 
 /**
+ * 将前端 Preferences 转换为后端格式（camelCase → snake_case）
+ */
+function preferencesToDto(pref: any): any {
+    if (!pref) return pref
+    
+    return {
+        window_name: pref.windowName,
+        custom_bookmarks: pref.customBookmarks,
+        extensions: pref.extensions,
+        custom_extensions: pref.customExtensions,
+        startup_page: pref.startupPage,
+        startup_url: pref.startupUrl,
+        sync_bookmarks: pref.syncBookmarks,
+        sync_history: pref.syncHistory,
+        sync_tabs: pref.syncTabs,
+        sync_cookies: pref.syncCookies,
+        sync_extensions: pref.syncExtensions,
+        sync_passwords: pref.syncPasswords,
+        sync_indexed_db: pref.syncIndexedDB,
+        sync_local_storage: pref.syncLocalStorage,
+        sync_session_storage: pref.syncSessionStorage,
+        clear_cache_on_start: pref.clearCacheOnStart,
+        clear_cookies_on_start: pref.clearCookiesOnStart,
+        clear_local_storage_on_start: pref.clearLocalStorageOnStart,
+        clear_history_on_exit: pref.clearHistoryOnExit,
+        clear_cookies_on_exit: pref.clearCookiesOnExit,
+        clear_cache_on_exit: pref.clearCacheOnExit,
+        cloud_sync: pref.cloudSync,
+        cloud_sync_extensions: pref.cloudSyncExtensions,
+        cloud_sync_bookmarks: pref.cloudSyncBookmarks,
+        random_fingerprint_on_start: pref.randomFingerprintOnStart,
+        show_password_save_prompt: pref.showPasswordSavePrompt,
+        stop_on_network_error: pref.stopOnNetworkError,
+        stop_on_ip_change: pref.stopOnIpChange,
+        stop_on_country_change: pref.stopOnCountryChange,
+        open_workbench: pref.openWorkbench,
+        ip_change_notification: pref.ipChangeNotification,
+        enable_google_login: pref.enableGoogleLogin,
+        url_blacklist: pref.urlBlacklist,
+        url_whitelist: pref.urlWhitelist,
+    }
+}
+
+/**
  * 将前端 Fingerprint 转换为后端格式
- * 支持两种输入格式：
- * 1. FingerprintConfig（从后端生成的复杂嵌套结构）
- * 2. 简单表单格式（扁平结构）
  */
 function fingerprintToDto(fp: any): any {
     if (!fp) return fp
     
-    // 处理复杂的 FingerprintConfig 格式（从后端生成的）
+    // 如果是嵌套的 FingerprintFileConfig 格式 (从 generateRandomFingerprint 返回)
     if (fp.navigator && fp.screen) {
         return {
-            seed: Date.now(),
+            seed: fp.seed?.master || fp.seed || Date.now(),
             platform: fp.navigator.platform || 'windows',
+            navigator_platform: fp.navigator.platform || 'Win32',
+            os_version: fp.client_hints?.platform_version || '10.0.0',
             browser: 'chrome',
+            browser_version: fp.client_hints?.full_version?.split('.')[0] || '139',
             user_agent: fp.navigator.user_agent,
             hardware_concurrency: fp.navigator.hardware_concurrency,
             device_memory: fp.navigator.device_memory,
+            screen_width: fp.screen.width,
+            screen_height: fp.screen.height,
             screen_resolution: `${fp.screen.width}x${fp.screen.height}`,
-            timezone: fp.timezone?.id || 'America/New_York',
+            timezone: fp.timezone?.id || 'Asia/Shanghai',
             language: fp.navigator.language,
-            canvas_noise: Array.isArray(fp.canvas?.rgb_noise) && fp.canvas.rgb_noise.length > 0,
-            webgl_noise: !!fp.webgl?.vendor,
-            audio_noise: typeof fp.audio?.noise_factor === 'number',
+            
+            // Canvas & WebGL & Audio
+            canvas_noise: fp.canvas?.mode === 'noise' || !!fp.canvas?.rgb_noise,
+            webgl_noise: fp.webgl?.noise_enabled || !!fp.webgl?.vendor,
+            webgl_vendor: fp.webgl?.unmasked_vendor || fp.webgl?.vendor,
+            webgl_renderer: fp.webgl?.unmasked_renderer || fp.webgl?.renderer,
+            webgpu: true,
+            audio_noise: fp.audio?.mode === 'noise' || typeof fp.audio?.noise_factor === 'number',
+            audio_context: fp.audio?.mode || 'noise',
+            canvas: fp.canvas?.mode || 'noise',
+            
+            // WebRTC
+            webrtc: fp.webrtc?.mode || 'disabled',
+            webrtc_public_ip: fp.webrtc?.public_ip,
+            webrtc_local_ip: fp.webrtc?.local_ip,
+            
+            // 隐私保护
+            do_not_track: fp.navigator?.do_not_track || 'unspecified',
+            client_rects: fp.privacy?.client_rects_noise !== false,
+            media_devices: fp.mediaDevices || 'real',
+            port_scan_protection: fp.privacy?.port_scan_protection !== false,
+            port_scan_whitelist: fp.portScanWhitelist || null,
+            fonts: Array.isArray(fp.fonts?.list) ? fp.fonts.list : [],
+            custom_fonts: [],
+            speech_voices: [],
+            ignore_cert_errors: fp.ignore_cert_errors || false,
+            custom_plugins: fp.custom_plugins,
+            cloudflare_optimize: fp.cloudflare_optimize,
+            
+            // 设备信息
+            device_name: fp.device?.name,
+            mac_address: fp.device?.mac_address,
+            ssl_fingerprint: fp.ssl_fingerprint,
+            
+            // 性能设置
+            hardware_acceleration: fp.hardware_acceleration !== false,
+            disable_sandbox: fp.disable_sandbox || false,
+            launch_args: fp.launch_args,
         }
     }
     
-    // 简单格式（直接从表单来的）- 包含所有新增字段
+    // 如果是扁平的 FingerprintConfig 格式 (从表单或 profileApi 返回)
     return {
         seed: fp.seed || Date.now(),
-        platform: fp.platform,
-        navigator_platform: fp.navigatorPlatform,  // navigator.platform 值
-        os_version: fp.osVersion,  // 操作系统版本
-        browser: fp.browser || 'chrome',
-        browser_version: fp.browserVersion,  // 浏览器版本
-        user_agent: fp.userAgent,
-        hardware_concurrency: fp.hardwareConcurrency,
-        device_memory: fp.deviceMemory,
-        screen_width: fp.screenWidth,
-        screen_height: fp.screenHeight,
-        screen_resolution: fp.screenResolution || `${fp.screenWidth}x${fp.screenHeight}`,
-        timezone: fp.timezone,
-        language: fp.language,
+        platform: fp.platform || 'windows',  // 确保必填字段有默认值
+        navigator_platform: fp.navigator_platform || fp.navigatorPlatform || 'Win32',
+        os_version: fp.os_version || fp.osVersion || 'Windows 10',
+        browser: fp.browser || 'chrome',  // 确保必填字段有默认值
+        browser_version: fp.browser_version || fp.browserVersion || '120',
+        user_agent: fp.user_agent || fp.userAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        hardware_concurrency: fp.hardware_concurrency || fp.hardwareConcurrency || 8,
+        device_memory: fp.device_memory || fp.deviceMemory || 8,
+        screen_width: fp.screen_width || fp.screenWidth || 1920,
+        screen_height: fp.screen_height || fp.screenHeight || 1080,
+        screen_resolution: fp.screen_resolution || fp.screenResolution || `${fp.screen_width || fp.screenWidth || 1920}x${fp.screen_height || fp.screenHeight || 1080}`,
+        timezone: fp.timezone || 'Asia/Shanghai',
+        language: fp.language || 'zh-CN',
         
-        // Canvas & WebGL & Audio
-        canvas_noise: fp.canvas === 'noise',
-        webgl_noise: fp.webgl === 'noise',
-        webgl_vendor: fp.webglVendor,
-        webgl_renderer: fp.webglRenderer,
-        webgpu: fp.webgpu,  // 'webgl' | 'real' | 'disable'
-        audio_noise: fp.audioContext === 'noise',
+        // Canvas & WebGL & Audio - 确保布尔字段有默认值
+        canvas_noise: fp.canvas === 'noise' || fp.canvas_noise || fp.canvasNoise || true,
+        webgl_noise: fp.webgl === 'noise' || fp.webgl_noise || fp.webglNoise || true,
+        webgl_vendor: fp.webgl_vendor || fp.webglVendor || 'Google Inc. (NVIDIA)',
+        webgl_renderer: fp.webgl_renderer || fp.webglRenderer || 'ANGLE (NVIDIA GeForce GTX 1660)',
+        webgpu: fp.webgpu === 'real' || fp.webgpu === 'webgl' || fp.webgpu === true || false,
+        audio_noise: fp.audio_context === 'noise' || fp.audioContext === 'noise' || fp.audio_noise || fp.audioNoise || true,
+        audio_context: fp.audio_context || fp.audioContext,
+        canvas: fp.canvas,
         
         // WebRTC
-        webrtc: fp.webrtc,  // 'replace' | 'real' | 'disable'
-        public_ip: fp.publicIp,
-        local_ip: fp.localIp,
+        webrtc: fp.webrtc,
+        webrtc_public_ip: fp.webrtc_public_ip || fp.webrtcPublicIp,
+        webrtc_local_ip: fp.webrtc_local_ip || fp.webrtcLocalIp,
         
         // 隐私保护
-        do_not_track: fp.doNotTrack,  // 'enable' | 'disable' | 'unspecified'
-        client_rects: fp.clientRects,
-        media_devices: fp.mediaDevices,  // 'real' | 'fake' | 'disable'
-        port_scan_protection: fp.portScanProtection,
-        port_scan_whitelist: fp.portScanWhitelist,
-        fonts: fp.fonts,  // 'system' | 'custom'
-        custom_fonts: fp.customFonts,
-        speech_voices: fp.speechVoices,  // 'match' | 'disable'
-        ignore_cert_errors: fp.ignoreCertErrors,
-        custom_plugins: fp.customPlugins,
-        cloudflare_optimize: fp.cloudflareOptimize,
+        do_not_track: fp.do_not_track || fp.doNotTrack || 'unspecified',
+        client_rects: fp.client_rects || fp.clientRects,
+        media_devices: fp.media_devices || fp.mediaDevices,
+        port_scan_protection: fp.port_scan_protection || fp.portScanProtection,
+        port_scan_whitelist: fp.port_scan_whitelist || fp.portScanWhitelist || null,
+        fonts: Array.isArray(fp.fonts) ? fp.fonts : (typeof fp.fonts === 'string' ? fp.fonts.split(',').filter(Boolean) : []),
+        custom_fonts: Array.isArray(fp.customFonts) ? fp.customFonts : (typeof fp.customFonts === 'string' ? fp.customFonts.split(',').filter(Boolean) : []),
+        speech_voices: Array.isArray(fp.speechVoices) ? fp.speechVoices : (typeof fp.speechVoices === 'string' ? fp.speechVoices.split(',').filter(Boolean) : []),
+        ignore_cert_errors: fp.ignore_cert_errors || fp.ignoreCertErrors || false,
+        custom_plugins: fp.custom_plugins || fp.customPlugins,
+        cloudflare_optimize: fp.cloudflare_optimize || fp.cloudflareOptimize,
         
         // 设备信息
-        device_name: fp.deviceName,
-        mac_address: fp.macAddress,
+        device_name: fp.device_name || fp.deviceName,
+        mac_address: fp.mac_address || fp.macAddress,
+        ssl_fingerprint: fp.ssl_fingerprint || fp.sslFingerprint,
         
         // 性能设置
-        hardware_acceleration: fp.hardwareAcceleration,
-        disable_sandbox: fp.disableSandbox,
-        launch_args: fp.launchArgs,
+        hardware_acceleration: fp.hardware_acceleration || fp.hardwareAcceleration,
+        disable_sandbox: fp.disable_sandbox || fp.disableSandbox,
+        launch_args: fp.launch_args || fp.launchArgs,
+        
+        // 字体配置
+        fonts_mode: fp.fonts_mode || fp.fontsMode || 'subset',
+        fonts_list: fp.fonts_list || fp.fontsList || [],
+        
+        // Variations 配置
+        variations_enabled: fp.variations_enabled ?? fp.variationsEnabled ?? true,
+        variations_seed_id: fp.variations_seed_id || fp.variationsSeedId || '',
+        
+        // 地理位置配置
+        geolocation_mode: fp.geolocation_mode || fp.geolocationMode || 'disabled',
+        geolocation_latitude: fp.geolocation_latitude ?? fp.geolocationLatitude ?? null,
+        geolocation_longitude: fp.geolocation_longitude ?? fp.geolocationLongitude ?? null,
+        geolocation_accuracy: fp.geolocation_accuracy ?? fp.geolocationAccuracy ?? null,
+        geolocation_prompt: fp.geolocation_prompt || fp.geolocationPrompt || 'ask',
     }
 }
 
 /**
  * 将前端表单数据转换为浏览器配置文件所需的嵌套结构
- * 这是完整的 FingerprintFileConfig 结构，用于生成浏览器配置文件
  */
 function formToBrowserConfig(form: any): any {
     if (!form) return null;
@@ -403,7 +581,7 @@ export async function createProfile(data: CreateProfileDTO): Promise<Profile> {
             ...data,
             fingerprint: fingerprintToDto(data.fingerprint),
             proxy: proxyToDto(data.proxy),
-            preferences: data.preferences,
+            preferences: preferencesToDto(data.preferences),
         }
         const dto = await invoke<ProfileDto>('create_profile', { data: backendData })
         return dtoToProfile(dto)
@@ -418,11 +596,12 @@ export async function createProfile(data: CreateProfileDTO): Promise<Profile> {
  */
 export async function updateProfile(id: string, data: UpdateProfileDTO): Promise<Profile> {
     try {
-        // 转换指纹字段为后端格式（如果存在）
+        // 转换字段为后端格式
         const backendData = {
             ...data,
             fingerprint: data.fingerprint ? fingerprintToDto(data.fingerprint) : undefined,
-            preferences: data.preferences,
+            proxy: data.proxy ? proxyToDto(data.proxy) : undefined,
+            preferences: data.preferences ? preferencesToDto(data.preferences) : undefined,
         }
         const dto = await invoke<ProfileDto>('update_profile', { id, data: backendData })
         return dtoToProfile(dto)

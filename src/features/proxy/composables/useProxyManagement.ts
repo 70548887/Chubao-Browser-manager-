@@ -4,7 +4,8 @@
  */
 
 import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessageBox } from 'element-plus'
+import { Message } from '@/utils/message'
 import { 
   getProxies, 
   createProxy, 
@@ -200,7 +201,7 @@ export function useProxyManagement() {
       proxies.value = await getProxies()
     } catch (error) {
       console.error('Failed to load proxies:', error)
-      ElMessage.error('加载代理列表失败')
+      Message.error('加载代理列表失败')
     } finally {
       isLoading.value = false
     }
@@ -241,7 +242,7 @@ export function useProxyManagement() {
   }
 
   const handleCheck = async (proxy: Proxy) => {
-    const loadingMsg = ElMessage.info({
+    const loadingMsg = Message.info({
       message: `正在检测代理 ${proxy.host}:${proxy.port}...`,
       duration: 0
     })
@@ -251,7 +252,7 @@ export function useProxyManagement() {
       loadingMsg.close()
       
       if (result.success) {
-        ElMessage.success({
+        Message.success({
           message: `代理连接正常 - 延迟: ${result.latency}ms`,
           duration: 3000
         })
@@ -264,7 +265,7 @@ export function useProxyManagement() {
           if (result.latency !== undefined) proxies.value[index].latency = result.latency
         }
       } else {
-        ElMessage.error({
+        Message.error({
           message: `代理连接失败: ${result.error || '未知错误'}`,
           duration: 5000
         })
@@ -278,7 +279,7 @@ export function useProxyManagement() {
       loadingMsg.close()
       console.error('Failed to test proxy:', error)
       const errorMsg = error instanceof Error ? error.message : '未知错误'
-      ElMessage.error(`检测代理失败: ${errorMsg}`)
+      Message.error(`检测代理失败: ${errorMsg}`)
     }
   }
 
@@ -291,22 +292,22 @@ export function useProxyManagement() {
       )
       await deleteProxy(proxy.id)
       proxies.value = proxies.value.filter(p => p.id !== proxy.id)
-      ElMessage.success('删除成功')
+      Message.success('删除成功')
     } catch (error) {
       if (error !== 'cancel') {
         console.error('Failed to delete proxy:', error)
-        ElMessage.error('删除代理失败')
+        Message.error('删除代理失败')
       }
     }
   }
 
   const handleBatchCheck = async () => {
     if (selectedIds.value.length === 0) {
-      ElMessage.warning('请先选择要检查的代理')
+      Message.warning('请先选择要检查的代理')
       return
     }
     
-    const loadingMsg = ElMessage.info({
+    const loadingMsg = Message.info({
       message: `正在批量检测 ${selectedIds.value.length} 个代理...`,
       duration: 0
     })
@@ -335,23 +336,23 @@ export function useProxyManagement() {
       }
       
       if (failCount === 0) {
-        ElMessage.success(`批量检测完成：全部 ${successCount} 个代理连接正常`)
+        Message.success(`批量检测完成：全部 ${successCount} 个代理连接正常`)
       } else if (successCount === 0) {
-        ElMessage.error(`批量检测完成：全部 ${failCount} 个代理连接失败`)
+        Message.error(`批量检测完成：全部 ${failCount} 个代理连接失败`)
       } else {
-        ElMessage.warning(`批量检测完成：${successCount} 个正常，${failCount} 个失败`)
+        Message.warning(`批量检测完成：${successCount} 个正常，${failCount} 个失败`)
       }
     } catch (error: unknown) {
       loadingMsg.close()
       console.error('Batch test failed:', error)
       const errorMsg = error instanceof Error ? error.message : '未知错误'
-      ElMessage.error(`批量检测失败: ${errorMsg}`)
+      Message.error(`批量检测失败: ${errorMsg}`)
     }
   }
 
   const handleBatchDelete = async () => {
     if (selectedIds.value.length === 0) {
-      ElMessage.warning('请先选择要删除的代理')
+      Message.warning('请先选择要删除的代理')
       return
     }
     
@@ -383,9 +384,9 @@ export function useProxyManagement() {
       selectedIds.value = []
       
       if (failCount === 0) {
-        ElMessage.success(`成功删除 ${successCount} 个代理`)
+        Message.success(`成功删除 ${successCount} 个代理`)
       } else {
-        ElMessage.warning(`删除完成：成功 ${successCount} 个，失败 ${failCount} 个`)
+        Message.warning(`删除完成：成功 ${successCount} 个，失败 ${failCount} 个`)
       }
     } catch {
       // 用户取消删除
@@ -394,7 +395,7 @@ export function useProxyManagement() {
 
   const handleTestConnection = async () => {
     if (!formData.host.trim() || !formData.port.trim()) {
-      ElMessage.warning('请先输入代理主机和端口')
+      Message.warning('请先输入代理主机和端口')
       return
     }
     
@@ -410,26 +411,26 @@ export function useProxyManagement() {
       )
       if (result.success) {
         testStatus.value = 'success'
-        ElMessage.success(`连接成功 - 延迟: ${result.latency}ms${result.ip ? ` - IP: ${result.ip}` : ''}`)
+        Message.success(`连接成功 - 延迟: ${result.latency}ms${result.ip ? ` - IP: ${result.ip}` : ''}`)
       } else {
         testStatus.value = 'error'
-        ElMessage.error(`连接失败: ${result.error || '未知错误'}`)
+        Message.error(`连接失败: ${result.error || '未知错误'}`)
       }
     } catch (error: unknown) {
       testStatus.value = 'error'
       const errorMsg = error instanceof Error ? error.message : '未知错误'
-      ElMessage.error(`测试连接出错: ${errorMsg}`)
+      Message.error(`测试连接出错: ${errorMsg}`)
     }
   }
 
   const handleSubmit = async () => {
     if (!formData.host.trim() && importMode.value === 'single') {
-      ElMessage.warning('请输入代理主机')
+      Message.warning('请输入代理主机')
       return
     }
     
     if (!formData.port.trim() && importMode.value === 'single') {
-      ElMessage.warning('请输入代理端口')
+      Message.warning('请输入代理端口')
       return
     }
     
@@ -441,7 +442,7 @@ export function useProxyManagement() {
       )
       
       if (existingProxy) {
-        ElMessage.error('代理配置已存在')
+        Message.error('代理配置已存在')
         return
       }
     }
@@ -464,7 +465,7 @@ export function useProxyManagement() {
         if (index !== -1) {
           proxies.value[index] = updated
         }
-        ElMessage.success('保存成功')
+        Message.success('保存成功')
       } else if (importMode.value === 'single') {
         // 单个添加模式
         const newProxy = await createProxy({
@@ -479,12 +480,12 @@ export function useProxyManagement() {
           remark: formData.remark || undefined
         })
         proxies.value.unshift(newProxy)
-        ElMessage.success('添加成功')
+        Message.success('添加成功')
       } else {
         // 批量导入模式
         const proxiesToImport = parseBatchInput()
         if (proxiesToImport.length === 0) {
-          ElMessage.warning('请输入有效的代理配置')
+          Message.warning('请输入有效的代理配置')
           return
         }
 
@@ -530,11 +531,11 @@ export function useProxyManagement() {
         if (failCount > 0) messages.push(`失败 ${failCount} 个`)
         
         if (failCount === 0 && skipCount === 0) {
-          ElMessage.success(`成功批量导入 ${successCount} 个代理`)
+          Message.success(`成功批量导入 ${successCount} 个代理`)
         } else if (successCount === 0 && failCount > 0) {
-          ElMessage.error(`批量导入失败：${messages.join('，')}`)
+          Message.error(`批量导入失败：${messages.join('，')}`)
         } else {
-          ElMessage.warning(`批量导入完成：${messages.join('，')}`)
+          Message.warning(`批量导入完成：${messages.join('，')}`)
         }
       }
       
@@ -547,7 +548,7 @@ export function useProxyManagement() {
         const detailMessage = errorMessage.includes(':') 
           ? errorMessage.split(':').slice(1).join(':').trim() 
           : errorMessage
-        ElMessage.error(detailMessage)
+        Message.error(detailMessage)
       }
     }
   }

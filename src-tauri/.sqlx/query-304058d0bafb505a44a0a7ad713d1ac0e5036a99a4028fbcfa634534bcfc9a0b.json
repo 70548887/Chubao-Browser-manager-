@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "\n            SELECT \n                g.id as \"id!: String\",\n                g.name as \"name!: String\",\n                g.sort as \"sort!: i32\",\n                g.permission as \"permission!: String\",\n                g.remark as \"remark: String\",\n                g.icon as \"icon: String\",\n                g.created_at as \"created_at!: String\",\n                g.updated_at as \"updated_at!: String\",\n                COUNT(p.id) as \"profile_count!: i32\"\n            FROM groups g\n            LEFT JOIN profiles p ON p.group_id = g.id\n            GROUP BY g.id\n            ORDER BY g.sort ASC, g.created_at ASC\n            ",
+  "query": "\n            SELECT \n                g.id as \"id!: String\",\n                g.name as \"name!: String\",\n                g.sort as \"sort!: i32\",\n                g.permission as \"permission!: String\",\n                g.remark as \"remark: String\",\n                g.icon as \"icon: String\",\n                g.created_at as \"created_at!: String\",\n                g.updated_at as \"updated_at!: String\",\n                COUNT(p.id) as \"profile_count!: i32\"\n            FROM groups g\n            LEFT JOIN profiles p ON p.group_id = g.id AND p.deleted_at IS NULL\n            GROUP BY g.id\n            ORDER BY g.sort ASC, g.created_at ASC\n            ",
   "describe": {
     "columns": [
       {
@@ -64,5 +64,5 @@
       false
     ]
   },
-  "hash": "255c3b5078d5329b2a6eb5217f5aa2f8522b442b8d709bb1c2d3df957394ee02"
+  "hash": "304058d0bafb505a44a0a7ad713d1ac0e5036a99a4028fbcfa634534bcfc9a0b"
 }

@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 
 /// 批量操作单项结果
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BatchItemResult {
     pub profile_id: String,
     pub ok: bool,
@@ -30,6 +31,7 @@ impl BatchItemResult {
 
 /// 批量操作结果
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BatchResult {
     pub results: Vec<BatchItemResult>,
     pub total: usize,

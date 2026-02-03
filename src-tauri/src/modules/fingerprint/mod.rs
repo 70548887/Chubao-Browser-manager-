@@ -4,7 +4,7 @@ pub mod seed_manager;
 pub mod templates;
 pub mod generator;
 pub mod noise;
-pub mod validator;  // 新增：一致性校验器
+pub mod validator;  // 重新启用，已适配新结构体
 
 // 导出主要类型
 pub use seed_manager::SeedManager;
