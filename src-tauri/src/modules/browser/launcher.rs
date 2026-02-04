@@ -54,15 +54,19 @@ impl BrowserLauncher {
             info!("Loading extensions: {}", ext_paths);
         }
         
-        // 基础启动参数
+        // Basic startup parameters
         cmd.args([
-            "--no-first-run",                    // 跳过首次运行向导
-            "--disable-background-networking",   // 禁用后台网络请求
-            "--disable-sync",                    // 禁用同步功能
+            "--no-first-run",                    // Skip first run wizard
+            "--disable-background-networking",   // Disable background network requests
+            "--disable-sync",                    // Disable sync
             
-            // WebRTC IP泄露保护（关键安全参数）
+            // WebRTC IP leak protection (critical security parameter)
             "--force-webrtc-ip-handling-policy=disable_non_proxied_udp",
             "--enforce-webrtc-ip-permission-check",
+            
+            // Debug logging (可在生产环境移除)
+            "--enable-logging",
+            "--v=1",
         ]);
         
         // ❌ 不添加 --remote-debugging-port（方案A规范：无CDP）

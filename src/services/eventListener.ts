@@ -1,7 +1,7 @@
 // 事件监听服务 - 监听后端 Tauri 事件
 import { listen } from '@tauri-apps/api/event'
 import { useProfileStore } from '@/stores/profile.store'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from 'element-plus'  // 保留用于浏览器错误提示
 import type { Profile } from '@/types'
 
 /**
@@ -49,10 +49,10 @@ export async function initEventListeners() {
         const profile = event.payload
         
         // 将新创建的环境添加到列表（如果当前不在列表中）
+        // 注意：消息提示由业务组件处理，这里只做数据同步
         const exists = profileStore.profiles.some(p => p.id === profile.id)
         if (!exists) {
             profileStore.profiles.unshift(profile)
-            ElMessage.success(`环境 "${profile.name}" 创建成功`)
         }
     })
 
@@ -73,9 +73,8 @@ export async function initEventListeners() {
         console.log('Profile deleted:', event.payload)
         const { id } = event.payload
         
-        // 从列表中移除
+        // 从列表中移除，消息提示由业务组件处理
         profileStore.profiles = profileStore.profiles.filter(p => p.id !== id)
-        ElMessage.info('环境已删除')
     })
 
     // 5. 监听浏览器错误事件

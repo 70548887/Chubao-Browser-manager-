@@ -34,7 +34,7 @@ mod integration_tests {
         
         for i in 0..TEST_COUNT {
             let profile_id = format!("test_profile_{}", i);
-            let fingerprint = generator.generate(&profile_id);
+            let fingerprint = generator.generate(&profile_id, None, None);
             
             // 统计CPU核心数
             *cpu_cores_stats.entry(fingerprint.navigator.hardware_concurrency)
@@ -121,7 +121,7 @@ mod integration_tests {
         
         for i in 0..TEST_COUNT {
             let profile_id = format!("unique_test_{}", i);
-            let fingerprint = generator.generate(&profile_id);
+            let fingerprint = generator.generate(&profile_id, None, None);
             
             // 使用多个关键字段组合生成hash
             let fp_signature = format!(
@@ -174,7 +174,7 @@ mod integration_tests {
             
             // 同一Profile生成5次
             for _ in 0..REGENERATION_COUNT {
-                let fp = generator.generate(&profile_id);
+                let fp = generator.generate(&profile_id, None, None);
                 fingerprints.push(fp);
             }
             
@@ -202,8 +202,8 @@ mod integration_tests {
                     "Profile {} 第{}次生成的WebGL Renderer不一致", i, idx
                 );
                 assert_eq!(
-                    fp.seed.master, first.seed.master,
-                    "Profile {} 第{}次生成的Master Seed不一致", i, idx
+                    fp.timezone.timezone, first.timezone.timezone,
+                    "Profile {} 第{}次生成的Timezone不一致", i, idx
                 );
             }
         }
@@ -235,7 +235,7 @@ mod integration_tests {
         
         for i in 0..TEST_COUNT {
             let profile_id = format!("validate_test_{}", i);
-            let fingerprint = generator.generate(&profile_id);
+            let fingerprint = generator.generate(&profile_id, None, None);
             
             // 使用静态方法调用validator
             let result = FingerprintValidator::validate(&fingerprint);

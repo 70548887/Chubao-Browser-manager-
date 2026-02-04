@@ -1,46 +1,48 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod modules;
 mod infrastructure;
+mod modules;
 
-use modules::{ProfileService, BrowserLauncher, BrowserManager, GroupService, TagService, RecycleBinService, ProxyService, RecycledProfile, ConfigWriter, ProxyBridgeManager, ProxyBridgeConfig, BridgeStats};
-use modules::profile::{CreateProfileDto, UpdateProfileDto, Profile, ProfileStatus};
-use modules::group::{CreateGroupDto, UpdateGroupDto, Group};
-use modules::tag::{CreateTagDto, UpdateTagDto, Tag};  // ✅ V5 解锁
-use modules::proxy::{CreateProxyDto, UpdateProxyDto, Proxy};  // ✅ V5 升级
 use infrastructure::init_database;
-use tauri::{Manager, State, Emitter};
-use std::sync::Arc;
-use tokio::sync::Mutex;
-use sqlx::SqlitePool;
+use modules::group::{CreateGroupDto, Group, UpdateGroupDto};
+use modules::profile::{CreateProfileDto, Profile, ProfileStatus, UpdateProfileDto};
+use modules::proxy::{CreateProxyDto, Proxy, UpdateProxyDto}; // ✅ V5 升级
+use modules::tag::{CreateTagDto, Tag, UpdateTagDto}; // ✅ V5 解锁
+use modules::{
+    BridgeStats, BrowserLauncher, BrowserManager, ConfigWriter, DownloadProgress, DownloadStatus,
+    GroupService, KernelDownloader, KernelVersionInfo, ProfileService, ProxyBridgeConfig,
+    ProxyBridgeManager, ProxyService, RecycleBinService, RecycledProfile, TagService,
+};
 use sqlx::Row;
+use sqlx::SqlitePool;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
+use tauri::{Emitter, Manager, State};
+use tokio::sync::Mutex;
 
 use std::error::Error;
 
 #[cfg(windows)]
-use windows::Win32::Foundation::{HWND, LPARAM, BOOL};
+use windows::Win32::Foundation::{BOOL, HWND, LPARAM};
 
 #[cfg(windows)]
 use windows::Win32::UI::WindowsAndMessaging::{
-    EnumWindows, GetWindowThreadProcessId, ShowWindow, SetWindowPos, GetSystemMetrics,
-    SW_HIDE, SW_SHOW, SW_RESTORE,
-    HWND_TOP,
-    SWP_NOZORDER,
-    SM_CXSCREEN, SM_CYSCREEN,
+    EnumWindows, GetSystemMetrics, GetWindowThreadProcessId, SetWindowPos, ShowWindow, HWND_TOP,
+    SM_CXSCREEN, SM_CYSCREEN, SWP_NOZORDER, SW_HIDE, SW_RESTORE, SW_SHOW,
 };
 
-/// 应用状态
+/// Application state
 pub struct AppState {
     profile_service: Arc<Mutex<ProfileService>>,
     group_service: Arc<Mutex<GroupService>>,
-    tag_service: Arc<Mutex<TagService>>,  // ✅ V5 解锁
-    recycle_bin_service: Arc<Mutex<RecycleBinService>>,  // ✅ V5 解锁
-    proxy_service: Arc<Mutex<ProxyService>>,  // ✅ V5 升级
-    extension_service: Arc<Mutex<modules::ExtensionService>>,  // ✅ 扩展管理
-    proxy_bridge_manager: Arc<ProxyBridgeManager>,  // ✅ P3 代理桥接
+    tag_service: Arc<Mutex<TagService>>,
+    recycle_bin_service: Arc<Mutex<RecycleBinService>>,
+    proxy_service: Arc<Mutex<ProxyService>>,
+    extension_service: Arc<Mutex<modules::ExtensionService>>,
+    proxy_bridge_manager: Arc<ProxyBridgeManager>,
+    kernel_downloader: Arc<Mutex<KernelDownloader>>, // Kernel download manager
     pool: SqlitePool,
     browser_manager: Arc<BrowserManager>,
     app_data_dir: PathBuf,
@@ -71,24 +73,31 @@ async fn set_setting(pool: &SqlitePool, key: &str, value: &str) -> Result<(), St
 
 /// 获取单个设置值
 #[tauri::command]
-async fn get_setting_value(key: String, state: State<'_, AppState>) -> Result<Option<String>, String> {
+async fn get_setting_value(
+    key: String,
+    state: State<'_, AppState>,
+) -> Result<Option<String>, String> {
     get_setting(&state.pool, &key).await
 }
 
 /// 设置单个设置值
 #[tauri::command]
-async fn set_setting_value(key: String, value: String, state: State<'_, AppState>) -> Result<(), String> {
+async fn set_setting_value(
+    key: String,
+    value: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
     // 特殊键值校验
     match key.as_str() {
         "kernel_path" => {
             modules::settings::validate_kernel_path(&value)?;
-        },
+        }
         "user_data_dir" => {
             modules::settings::validate_user_data_dir(&value)?;
-        },
+        }
         _ => {}
     }
-    
+
     set_setting(&state.pool, &key, &value).await
 }
 
@@ -153,12 +162,12 @@ async fn do_launch_browser(profile_id: String, state: &AppState) -> Result<(), S
     };
 
     let profile_dir = profile_user_data_dir(&base_user_data_dir, &profile_id);
-    std::fs::create_dir_all(&profile_dir)
-        .map_err(|e| format!("创建用户数据目录失败: {}", e))?;
+    std::fs::create_dir_all(&profile_dir).map_err(|e| format!("创建用户数据目录失败: {}", e))?;
 
     let profile = {
         let service = state.profile_service.lock().await;
-        service.get_profile(&profile_id)
+        service
+            .get_profile(&profile_id)
             .await
             .map_err(|e| e.to_string())?
     };
@@ -170,9 +179,12 @@ async fn do_launch_browser(profile_id: String, state: &AppState) -> Result<(), S
         &profile.name,
         &profile.group,
         &profile.fingerprint,
-    ).map_err(|e| {
+    )
+    .map_err(|e| {
         let error_msg = format!("写入配置文件失败: {}", e);
-        state.browser_manager.emit_error(profile_id.clone(), error_msg.clone());
+        state
+            .browser_manager
+            .emit_error(profile_id.clone(), error_msg.clone());
         error_msg
     })?;
 
@@ -180,7 +192,8 @@ async fn do_launch_browser(profile_id: String, state: &AppState) -> Result<(), S
     let extensions_dir = state.app_data_dir.join("Extensions");
     let load_extension_arg = {
         let extension_service = state.extension_service.lock().await;
-        extension_service.build_load_extension_arg(&extensions_dir, &profile_id)
+        extension_service
+            .build_load_extension_arg(&extensions_dir, &profile_id)
             .await
             .map_err(|e| format!("获取扩展列表失败: {}", e))?
     };
@@ -192,9 +205,13 @@ async fn do_launch_browser(profile_id: String, state: &AppState) -> Result<(), S
             modules::profile::ProxyType::Https => "https",
             modules::profile::ProxyType::Socks5 => "socks5",
         };
-        
+
         // 检查是否需要代理桥接（带密码的 SOCKS5）
-        if ProxyBridgeManager::needs_bridge(proxy_type, &proxy_config.username, &proxy_config.password) {
+        if ProxyBridgeManager::needs_bridge(
+            proxy_type,
+            &proxy_config.username,
+            &proxy_config.password,
+        ) {
             // 启动代理桥接
             let bridge_config = ProxyBridgeConfig {
                 upstream_host: proxy_config.host.clone(),
@@ -204,27 +221,33 @@ async fn do_launch_browser(profile_id: String, state: &AppState) -> Result<(), S
                 password: proxy_config.password.clone(),
                 enable_udp: true, // 启用 UDP 支持（用于 WebRTC）
             };
-            
-            let local_addr = state.proxy_bridge_manager
+
+            let local_addr = state
+                .proxy_bridge_manager
                 .start_bridge(&profile_id, bridge_config)
                 .await
                 .map_err(|e| {
                     let error_msg = format!("启动代理桥接失败: {}", e);
-                    state.browser_manager.emit_error(profile_id.clone(), error_msg.clone());
+                    state
+                        .browser_manager
+                        .emit_error(profile_id.clone(), error_msg.clone());
                     error_msg
                 })?;
-            
+
             tracing::info!(
                 profile_id = %profile_id,
                 local_addr = %local_addr,
                 upstream = %format!("{}:{}", proxy_config.host, proxy_config.port),
                 "代理桥接已启动，使用本地代理"
             );
-            
+
             Some(local_addr)
         } else {
             // 直接使用原始代理地址
-            Some(format!("{}://{}:{}", proxy_type, proxy_config.host, proxy_config.port))
+            Some(format!(
+                "{}://{}:{}",
+                proxy_type, proxy_config.host, proxy_config.port
+            ))
         }
     } else {
         None
@@ -232,20 +255,31 @@ async fn do_launch_browser(profile_id: String, state: &AppState) -> Result<(), S
 
     let launcher = BrowserLauncher::new(PathBuf::from(kernel_path));
     let child = launcher
-        .launch(&profile_id, &profile_dir, proxy_arg.as_deref(), load_extension_arg.as_deref())
+        .launch(
+            &profile_id,
+            &profile_dir,
+            proxy_arg.as_deref(),
+            load_extension_arg.as_deref(),
+        )
         .map_err(|e| {
             let error_msg = format!("启动浏览器失败: {}", e);
-            state.browser_manager.emit_error(profile_id.clone(), error_msg.clone());
+            state
+                .browser_manager
+                .emit_error(profile_id.clone(), error_msg.clone());
             error_msg
         })?;
 
     // 注册进程到 BrowserManager
-    state.browser_manager.register_process(profile_id.clone(), child).await?;
+    state
+        .browser_manager
+        .register_process(profile_id.clone(), child)
+        .await?;
 
     // 更新数据库状态
     {
         let service = state.profile_service.lock().await;
-        service.update_status(&profile_id, ProfileStatus::Running)
+        service
+            .update_status(&profile_id, ProfileStatus::Running)
             .await
             .map_err(|e| e.to_string())?;
     }
@@ -254,27 +288,31 @@ async fn do_launch_browser(profile_id: String, state: &AppState) -> Result<(), S
 }
 
 async fn do_stop_browser(profile_id: String, state: &AppState) -> Result<(), String> {
-    use tracing::{info, warn, debug};
-    
+    use tracing::{debug, info, warn};
+
     info!(profile_id = %profile_id, "开始停止浏览器");
-    
+
     // ✅ P3: 停止代理桥接（如果有）
     if let Err(e) = state.proxy_bridge_manager.stop_bridge(&profile_id).await {
         warn!(profile_id = %profile_id, error = %e, "停止代理桥接失败");
     }
-    
+
     // 从 BrowserManager 注销进程
-    let child_opt = state.browser_manager.unregister_process(&profile_id).await?;
+    let child_opt = state
+        .browser_manager
+        .unregister_process(&profile_id)
+        .await?;
 
     // 如果有 child，则优雅关闭
     if let Some(mut child) = child_opt {
         let pid = child.id();
         debug!(pid = pid, "发送关闭信号");
-        
+
         // 使用 spawn_blocking 包装同步等待
         let wait_result = tokio::task::spawn_blocking(move || {
             // 尝试等待进程，设置超时通过 try_wait 轮询实现
-            for _ in 0..30 { // 最多等待3秒 (100ms * 30)
+            for _ in 0..30 {
+                // 最多等待3秒 (100ms * 30)
                 match child.try_wait() {
                     Ok(Some(status)) => return Ok((child, Some(status))),
                     Ok(None) => {
@@ -285,7 +323,9 @@ async fn do_stop_browser(profile_id: String, state: &AppState) -> Result<(), Str
             }
             // 超时，返回 child 以便后续强制 kill
             Ok((child, None))
-        }).await.map_err(|e| format!("等待任务失败: {}", e))?;
+        })
+        .await
+        .map_err(|e| format!("等待任务失败: {}", e))?;
 
         match wait_result {
             Ok((_, Some(status))) => {
@@ -310,7 +350,8 @@ async fn do_stop_browser(profile_id: String, state: &AppState) -> Result<(), Str
     // 更新数据库状态
     {
         let service = state.profile_service.lock().await;
-        service.update_status(&profile_id, ProfileStatus::Stopped)
+        service
+            .update_status(&profile_id, ProfileStatus::Stopped)
             .await
             .map_err(|e| e.to_string())?;
     }
@@ -323,9 +364,7 @@ async fn do_stop_browser(profile_id: String, state: &AppState) -> Result<(), Str
 #[tauri::command]
 async fn get_profiles(state: State<'_, AppState>) -> Result<Vec<Profile>, String> {
     let service = state.profile_service.lock().await;
-    service.list_profiles()
-        .await
-        .map_err(|e| e.to_string())
+    service.list_profiles().await.map_err(|e| e.to_string())
 }
 
 /// 获取所有环境（兼容旧命令名）
@@ -338,9 +377,7 @@ async fn list_profiles(state: State<'_, AppState>) -> Result<Vec<Profile>, Strin
 #[tauri::command]
 async fn get_profile(id: String, state: State<'_, AppState>) -> Result<Profile, String> {
     let service = state.profile_service.lock().await;
-    service.get_profile(&id)
-        .await
-        .map_err(|e| e.to_string())
+    service.get_profile(&id).await.map_err(|e| e.to_string())
 }
 
 /// 创建环境
@@ -351,13 +388,14 @@ async fn create_profile(
     app: tauri::AppHandle,
 ) -> Result<Profile, String> {
     let service = state.profile_service.lock().await;
-    let profile = service.create_profile(data)
+    let profile = service
+        .create_profile(data)
         .await
         .map_err(|e| e.to_string())?;
-    
+
     // 发射 profile:created 事件
     let _ = app.emit("profile:created", &profile);
-    
+
     Ok(profile)
 }
 
@@ -370,13 +408,14 @@ async fn update_profile(
     app: tauri::AppHandle,
 ) -> Result<Profile, String> {
     let service = state.profile_service.lock().await;
-    let profile = service.update_profile(&id, data)
+    let profile = service
+        .update_profile(&id, data)
         .await
         .map_err(|e| e.to_string())?;
-    
+
     // 发射 profile:updated 事件
     let _ = app.emit("profile:updated", &profile);
-    
+
     Ok(profile)
 }
 
@@ -388,23 +427,27 @@ async fn delete_profile(
     app: tauri::AppHandle,
 ) -> Result<(), String> {
     let service = state.profile_service.lock().await;
-    service.delete_profile(&id)
+    service
+        .delete_profile(&id)
         .await
         .map_err(|e| e.to_string())?;
-    
+
     // 发射 profile:deleted 事件
     #[derive(serde::Serialize, Clone)]
     struct DeletedEvent {
         id: String,
     }
     let _ = app.emit("profile:deleted", DeletedEvent { id });
-    
+
     Ok(())
 }
 
 /// 批量删除环境
 #[tauri::command]
-async fn batch_delete_profiles(ids: Vec<String>, state: State<'_, AppState>) -> Result<modules::BatchResult, String> {
+async fn batch_delete_profiles(
+    ids: Vec<String>,
+    state: State<'_, AppState>,
+) -> Result<modules::BatchResult, String> {
     let service = state.profile_service.lock().await;
     let mut results = Vec::new();
 
@@ -433,7 +476,10 @@ async fn stop_browser(profile_id: String, state: State<'_, AppState>) -> Result<
 
 /// 批量启动浏览器
 #[tauri::command]
-async fn batch_launch_browsers(profile_ids: Vec<String>, state: State<'_, AppState>) -> Result<modules::BatchResult, String> {
+async fn batch_launch_browsers(
+    profile_ids: Vec<String>,
+    state: State<'_, AppState>,
+) -> Result<modules::BatchResult, String> {
     let mut results = Vec::new();
 
     for id in profile_ids {
@@ -449,7 +495,10 @@ async fn batch_launch_browsers(profile_ids: Vec<String>, state: State<'_, AppSta
 
 /// 批量停止浏览器
 #[tauri::command]
-async fn batch_stop_browsers(profile_ids: Vec<String>, state: State<'_, AppState>) -> Result<modules::BatchResult, String> {
+async fn batch_stop_browsers(
+    profile_ids: Vec<String>,
+    state: State<'_, AppState>,
+) -> Result<modules::BatchResult, String> {
     let mut results = Vec::new();
 
     for id in profile_ids {
@@ -468,20 +517,27 @@ async fn batch_stop_browsers(profile_ids: Vec<String>, state: State<'_, AppState
 async fn batch_move_to_group(
     profile_ids: Vec<String>,
     target_group_id: String,
-    state: State<'_, AppState>
+    state: State<'_, AppState>,
 ) -> Result<modules::BatchResult, String> {
     let mut results = Vec::new();
 
     for id in profile_ids {
         let result = {
             let service = state.profile_service.lock().await;
-            match service.update_profile(&id, UpdateProfileDto {
-                name: None,
-                group: Some(target_group_id.clone()),
-                fingerprint: None,
-                proxy: None,
-                remark: None,
-            }).await {
+            match service
+                .update_profile(
+                    &id,
+                    UpdateProfileDto {
+                        name: None,
+                        group: Some(target_group_id.clone()),
+                        fingerprint: None,
+                        proxy: None,
+                        remark: None,
+                        preferences: None,
+                    },
+                )
+                .await
+            {
                 Ok(_) => modules::BatchItemResult::success(id.clone()),
                 Err(e) => modules::BatchItemResult::failure(id.clone(), e.to_string()),
             }
@@ -496,7 +552,7 @@ async fn batch_move_to_group(
 #[tauri::command]
 async fn batch_duplicate_profiles(
     profile_ids: Vec<String>,
-    state: State<'_, AppState>
+    state: State<'_, AppState>,
 ) -> Result<modules::BatchResult, String> {
     let mut results = Vec::new();
 
@@ -506,17 +562,21 @@ async fn batch_duplicate_profiles(
             match service.get_profile(&id).await {
                 Ok(source_profile) => {
                     let copy_name = format!("{} (副本)", source_profile.name);
-                    match service.create_profile(CreateProfileDto {
-                        name: copy_name,
-                        group: source_profile.group,
-                        fingerprint: source_profile.fingerprint,
-                        proxy: source_profile.proxy,
-                        remark: source_profile.remark,
-                    }).await {
+                    match service
+                        .create_profile(CreateProfileDto {
+                            name: copy_name,
+                            group: source_profile.group,
+                            fingerprint: source_profile.fingerprint,
+                            proxy: source_profile.proxy,
+                            remark: source_profile.remark,
+                            preferences: source_profile.preferences,
+                        })
+                        .await
+                    {
                         Ok(new_profile) => modules::BatchItemResult::success(new_profile.id),
                         Err(e) => modules::BatchItemResult::failure(id.clone(), e.to_string()),
                     }
-                },
+                }
                 Err(e) => modules::BatchItemResult::failure(id.clone(), e.to_string()),
             }
         };
@@ -549,10 +609,10 @@ async fn create_group(
 ) -> Result<Group, String> {
     let service = state.group_service.lock().await;
     let group = service.create_group(data).await?;
-    
+
     // 发射 group:created 事件
     let _ = app.emit("group:created", &group);
-    
+
     Ok(group)
 }
 
@@ -566,10 +626,10 @@ async fn update_group(
 ) -> Result<Group, String> {
     let service = state.group_service.lock().await;
     let group = service.update_group(&id, data).await?;
-    
+
     // 发射 group:updated 事件
     let _ = app.emit("group:updated", &group);
-    
+
     Ok(group)
 }
 
@@ -582,14 +642,14 @@ async fn delete_group(
 ) -> Result<(), String> {
     let service = state.group_service.lock().await;
     service.delete_group(&id).await?;
-    
+
     // 发射 group:deleted 事件
     #[derive(serde::Serialize, Clone)]
     struct DeletedEvent {
         id: String,
     }
     let _ = app.emit("group:deleted", DeletedEvent { id });
-    
+
     Ok(())
 }
 
@@ -606,48 +666,54 @@ async fn generate_random_fingerprint(
     state: State<'_, AppState>,
 ) -> Result<modules::config_writer::FingerprintFileConfig, String> {
     use modules::FingerprintGenerator;
-    
+
     // 获取模板文件路径
-    let template_path = state.app_data_dir.join("data").join("templates").join("device_templates.json");
-    
+    let template_path = state
+        .app_data_dir
+        .join("data")
+        .join("templates")
+        .join("device_templates.json");
+
     // 如果模板文件不存在，从内嵌资源复制
     if !template_path.exists() {
         std::fs::create_dir_all(template_path.parent().unwrap())
             .map_err(|e| format!("创建模板目录失败: {}", e))?;
-        
+
         // 这里应该从资源文件复制，暂时返回错误提示
         return Err(format!("模板文件不存在: {:?}", template_path));
     }
-    
+
     // 创建生成器并生成指纹
     let generator = FingerprintGenerator::new(template_path)
         .map_err(|e| format!("创建指纹生成器失败: {}", e))?;
-    
+
     // 传递平台和浏览器版本参数
     let platform_str = platform.as_deref();
     let browser_version_str = browser_version.as_deref();
-    
+
     let fingerprint = generator.generate(&profile_id, platform_str, browser_version_str);
-    
+
     Ok(fingerprint)
 }
 
 /// 获取设备模板列表
 #[tauri::command]
-async fn get_template_list(
-    state: State<'_, AppState>,
-) -> Result<Vec<TemplateInfo>, String> {
+async fn get_template_list(state: State<'_, AppState>) -> Result<Vec<TemplateInfo>, String> {
     use modules::fingerprint::TemplateManager;
-    
-    let template_path = state.app_data_dir.join("data").join("templates").join("device_templates.json");
-    
+
+    let template_path = state
+        .app_data_dir
+        .join("data")
+        .join("templates")
+        .join("device_templates.json");
+
     if !template_path.exists() {
         return Err(format!("模板文件不存在: {:?}", template_path));
     }
-    
+
     let manager = TemplateManager::load_from_file(template_path)
         .map_err(|e| format!("加载模板失败: {}", e))?;
-    
+
     let templates = manager.get_all_templates();
     let template_infos: Vec<TemplateInfo> = templates
         .iter()
@@ -661,7 +727,7 @@ async fn get_template_list(
             gpu_vendor: t.gpu.vendor.clone(),
         })
         .collect();
-    
+
     Ok(template_infos)
 }
 
@@ -671,7 +737,7 @@ async fn validate_fingerprint(
     config: modules::config_writer::FingerprintFileConfig,
 ) -> Result<modules::fingerprint::ValidationResult, String> {
     use modules::fingerprint::FingerprintValidator;
-    
+
     let result = FingerprintValidator::validate(&config);
     Ok(result)
 }
@@ -707,10 +773,10 @@ async fn create_tag(
 ) -> Result<Tag, String> {
     let service = state.tag_service.lock().await;
     let tag = service.create_tag(data).await.map_err(|e| e.to_string())?;
-    
+
     // 发射 tag:created 事件
     let _ = app.emit("tag:created", &tag);
-    
+
     Ok(tag)
 }
 
@@ -723,11 +789,14 @@ async fn update_tag(
     app: tauri::AppHandle,
 ) -> Result<Tag, String> {
     let service = state.tag_service.lock().await;
-    let tag = service.update_tag(&id, data).await.map_err(|e| e.to_string())?;
-    
+    let tag = service
+        .update_tag(&id, data)
+        .await
+        .map_err(|e| e.to_string())?;
+
     // 发射 tag:updated 事件
     let _ = app.emit("tag:updated", &tag);
-    
+
     Ok(tag)
 }
 
@@ -740,14 +809,14 @@ async fn delete_tag(
 ) -> Result<(), String> {
     let service = state.tag_service.lock().await;
     service.delete_tag(&id).await.map_err(|e| e.to_string())?;
-    
+
     // 发射 tag:deleted 事件
     #[derive(serde::Serialize, Clone)]
     struct DeletedEvent {
         id: String,
     }
     let _ = app.emit("tag:deleted", DeletedEvent { id });
-    
+
     Ok(())
 }
 
@@ -765,28 +834,46 @@ async fn get_recycle_bin(state: State<'_, AppState>) -> Result<Vec<RecycledProfi
 #[tauri::command]
 async fn restore_profile(id: String, state: State<'_, AppState>) -> Result<(), String> {
     let service = state.recycle_bin_service.lock().await;
-    service.restore_profile(&id).await.map_err(|e| e.to_string())
+    service
+        .restore_profile(&id)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// 批量恢复窗口
 #[tauri::command]
-async fn batch_restore_profiles(ids: Vec<String>, state: State<'_, AppState>) -> Result<modules::BatchResult, String> {
+async fn batch_restore_profiles(
+    ids: Vec<String>,
+    state: State<'_, AppState>,
+) -> Result<modules::BatchResult, String> {
     let service = state.recycle_bin_service.lock().await;
-    service.batch_restore_profiles(ids).await.map_err(|e| e.to_string())
+    service
+        .batch_restore_profiles(ids)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// 永久删除窗口
 #[tauri::command]
 async fn permanently_delete_profile(id: String, state: State<'_, AppState>) -> Result<(), String> {
     let service = state.recycle_bin_service.lock().await;
-    service.permanently_delete(&id).await.map_err(|e| e.to_string())
+    service
+        .permanently_delete(&id)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// 批量永久删除窗口
 #[tauri::command]
-async fn batch_permanently_delete_profiles(ids: Vec<String>, state: State<'_, AppState>) -> Result<modules::BatchResult, String> {
+async fn batch_permanently_delete_profiles(
+    ids: Vec<String>,
+    state: State<'_, AppState>,
+) -> Result<modules::BatchResult, String> {
     let service = state.recycle_bin_service.lock().await;
-    service.batch_permanently_delete(ids).await.map_err(|e| e.to_string())
+    service
+        .batch_permanently_delete(ids)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// 清空回收站
@@ -821,11 +908,14 @@ async fn create_proxy(
     app: tauri::AppHandle,
 ) -> Result<Proxy, String> {
     let service = state.proxy_service.lock().await;
-    let proxy = service.create_proxy(data).await.map_err(|e| e.to_string())?;
-    
+    let proxy = service
+        .create_proxy(data)
+        .await
+        .map_err(|e| e.to_string())?;
+
     // 发射 proxy:created 事件
     let _ = app.emit("proxy:created", &proxy);
-    
+
     Ok(proxy)
 }
 
@@ -838,11 +928,14 @@ async fn update_proxy(
     app: tauri::AppHandle,
 ) -> Result<Proxy, String> {
     let service = state.proxy_service.lock().await;
-    let proxy = service.update_proxy(&id, data).await.map_err(|e| e.to_string())?;
-    
+    let proxy = service
+        .update_proxy(&id, data)
+        .await
+        .map_err(|e| e.to_string())?;
+
     // 发射 proxy:updated 事件
     let _ = app.emit("proxy:updated", &proxy);
-    
+
     Ok(proxy)
 }
 
@@ -855,47 +948,54 @@ async fn delete_proxy(
 ) -> Result<(), String> {
     let service = state.proxy_service.lock().await;
     service.delete_proxy(&id).await.map_err(|e| e.to_string())?;
-    
+
     // 发射 proxy:deleted 事件
     #[derive(serde::Serialize, Clone)]
     struct DeletedEvent {
         id: String,
     }
     let _ = app.emit("proxy:deleted", DeletedEvent { id });
-    
+
     Ok(())
 }
 
 /// 检测代理 - 使用新的 ProxyChecker（支持 HTTP/HTTPS/SOCKS5 + IP 地理位置）
 #[tauri::command]
-async fn test_proxy(id: String, state: State<'_, AppState>) -> Result<modules::ProxyCheckResult, String> {
+async fn test_proxy(
+    id: String,
+    state: State<'_, AppState>,
+) -> Result<modules::ProxyCheckResult, String> {
     let proxy = {
         let service = state.proxy_service.lock().await;
         service.get_proxy(&id).await.map_err(|e| e.to_string())?
     };
-    
+
     let checker = modules::ProxyChecker::new().with_timeout(10);
-    let result = checker.check_proxy(
-        &id,
-        &proxy.proxy_type,
-        &proxy.host,
-        &proxy.port,
-        proxy.username.as_deref(),
-        proxy.password.as_deref(),
-    ).await;
-    
+    let result = checker
+        .check_proxy(
+            &id,
+            &proxy.proxy_type,
+            &proxy.host,
+            &proxy.port,
+            proxy.username.as_deref(),
+            proxy.password.as_deref(),
+        )
+        .await;
+
     // 更新数据库中的检测结果
     {
         let service = state.proxy_service.lock().await;
         let status = if result.success { "active" } else { "error" };
-        let _ = service.update_test_result(
-            &id,
-            result.ip.as_deref(),
-            result.location.as_deref(),
-            status,
-        ).await;
+        let _ = service
+            .update_test_result(
+                &id,
+                result.ip.as_deref(),
+                result.location.as_deref(),
+                status,
+            )
+            .await;
     }
-    
+
     Ok(result)
 }
 
@@ -903,21 +1003,23 @@ async fn test_proxy(id: String, state: State<'_, AppState>) -> Result<modules::P
 #[tauri::command]
 async fn test_proxy_config(
     proxy_type: String,
-    host: String, 
+    host: String,
     port: String,
     username: Option<String>,
     password: Option<String>,
 ) -> Result<modules::ProxyCheckResult, String> {
     let checker = modules::ProxyChecker::new().with_timeout(10);
-    let result = checker.check_proxy(
-        "temp",
-        &proxy_type,
-        &host,
-        &port,
-        username.as_deref(),
-        password.as_deref(),
-    ).await;
-    
+    let result = checker
+        .check_proxy(
+            "temp",
+            &proxy_type,
+            &host,
+            &port,
+            username.as_deref(),
+            password.as_deref(),
+        )
+        .await;
+
     Ok(result)
 }
 
@@ -937,78 +1039,88 @@ async fn batch_test_proxies(
         }
         result
     };
-    
+
     let checker = modules::ProxyChecker::new().with_timeout(10);
-    
+
     // 逐个检测（避免生命周期问题）
     let mut results = Vec::new();
     for proxy in &proxies {
-        let result = checker.check_proxy(
-            &proxy.id,
-            &proxy.proxy_type,
-            &proxy.host,
-            &proxy.port,
-            proxy.username.as_deref(),
-            proxy.password.as_deref(),
-        ).await;
+        let result = checker
+            .check_proxy(
+                &proxy.id,
+                &proxy.proxy_type,
+                &proxy.host,
+                &proxy.port,
+                proxy.username.as_deref(),
+                proxy.password.as_deref(),
+            )
+            .await;
         results.push(result);
     }
-    
+
     // 更新数据库中的检测结果
     {
         let service = state.proxy_service.lock().await;
         for result in &results {
             let status = if result.success { "active" } else { "error" };
-            let _ = service.update_test_result(
-                &result.proxy_id,
-                result.ip.as_deref(),
-                result.location.as_deref(),
-                status,
-            ).await;
+            let _ = service
+                .update_test_result(
+                    &result.proxy_id,
+                    result.ip.as_deref(),
+                    result.location.as_deref(),
+                    status,
+                )
+                .await;
         }
     }
-    
+
     Ok(results)
 }
 
 /// 检测所有代理
 #[tauri::command]
-async fn test_all_proxies(state: State<'_, AppState>) -> Result<Vec<modules::ProxyCheckResult>, String> {
+async fn test_all_proxies(
+    state: State<'_, AppState>,
+) -> Result<Vec<modules::ProxyCheckResult>, String> {
     let proxies = {
         let service = state.proxy_service.lock().await;
         service.list_proxies().await.map_err(|e| e.to_string())?
     };
-    
+
     let checker = modules::ProxyChecker::new().with_timeout(10);
-    
+
     // 逐个检测
     let mut results = Vec::new();
     for proxy in &proxies {
-        let result = checker.check_proxy(
-            &proxy.id,
-            &proxy.proxy_type,
-            &proxy.host,
-            &proxy.port,
-            proxy.username.as_deref(),
-            proxy.password.as_deref(),
-        ).await;
+        let result = checker
+            .check_proxy(
+                &proxy.id,
+                &proxy.proxy_type,
+                &proxy.host,
+                &proxy.port,
+                proxy.username.as_deref(),
+                proxy.password.as_deref(),
+            )
+            .await;
         results.push(result);
     }
-    
+
     // 更新数据库中的检测结果
     {
         let service = state.proxy_service.lock().await;
         for result in &results {
             let status = if result.success { "active" } else { "error" };
-            let _ = service.update_test_result(
-                &result.proxy_id,
-                result.ip.as_deref(),
-                result.location.as_deref(),
-                status,
-            ).await;
+            let _ = service
+                .update_test_result(
+                    &result.proxy_id,
+                    result.ip.as_deref(),
+                    result.location.as_deref(),
+                    status,
+                )
+                .await;
         }
     }
-    
+
     Ok(results)
 }
 
@@ -1020,24 +1132,30 @@ async fn set_proxy_auto_check(
     state: State<'_, AppState>,
 ) -> Result<(), String> {
     let service = state.proxy_service.lock().await;
-    service.update_proxy(&id, modules::proxy::UpdateProxyDto {
-        name: None,
-        proxy_type: None,
-        host: None,
-        port: None,
-        source: None,
-        tag: None,
-        username: None,
-        password: None,
-        ip_address: None,
-        location: None,
-        remark: None,
-        auto_check: Some(enabled),
-        expire_at: None,
-        bind_window: None,
-        status: None,
-    }).await.map_err(|e| e.to_string())?;
-    
+    service
+        .update_proxy(
+            &id,
+            modules::proxy::UpdateProxyDto {
+                name: None,
+                proxy_type: None,
+                host: None,
+                port: None,
+                source: None,
+                tag: None,
+                username: None,
+                password: None,
+                ip_address: None,
+                location: None,
+                remark: None,
+                auto_check: Some(enabled),
+                expire_at: None,
+                bind_window: None,
+                status: None,
+            },
+        )
+        .await
+        .map_err(|e| e.to_string())?;
+
     Ok(())
 }
 
@@ -1080,14 +1198,22 @@ async fn get_extensions(state: State<'_, AppState>) -> Result<Vec<modules::Exten
 
 /// 获取已安装的扩展
 #[tauri::command]
-async fn get_installed_extensions(state: State<'_, AppState>) -> Result<Vec<modules::Extension>, String> {
+async fn get_installed_extensions(
+    state: State<'_, AppState>,
+) -> Result<Vec<modules::Extension>, String> {
     let service = state.extension_service.lock().await;
-    service.list_installed_extensions().await.map_err(|e| e.to_string())
+    service
+        .list_installed_extensions()
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// 获取单个扩展
 #[tauri::command]
-async fn get_extension(id: String, state: State<'_, AppState>) -> Result<modules::Extension, String> {
+async fn get_extension(
+    id: String,
+    state: State<'_, AppState>,
+) -> Result<modules::Extension, String> {
     let service = state.extension_service.lock().await;
     service.get_extension(&id).await.map_err(|e| e.to_string())
 }
@@ -1099,7 +1225,10 @@ async fn create_extension(
     state: State<'_, AppState>,
 ) -> Result<modules::Extension, String> {
     let service = state.extension_service.lock().await;
-    service.create_extension(data).await.map_err(|e| e.to_string())
+    service
+        .create_extension(data)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// 更新扩展
@@ -1110,14 +1239,20 @@ async fn update_extension(
     state: State<'_, AppState>,
 ) -> Result<modules::Extension, String> {
     let service = state.extension_service.lock().await;
-    service.update_extension(&id, data).await.map_err(|e| e.to_string())
+    service
+        .update_extension(&id, data)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// 删除扩展
 #[tauri::command]
 async fn delete_extension(id: String, state: State<'_, AppState>) -> Result<(), String> {
     let service = state.extension_service.lock().await;
-    service.delete_extension(&id).await.map_err(|e| e.to_string())
+    service
+        .delete_extension(&id)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// 切换扩展启用状态
@@ -1128,7 +1263,10 @@ async fn toggle_extension(
     state: State<'_, AppState>,
 ) -> Result<modules::Extension, String> {
     let service = state.extension_service.lock().await;
-    service.toggle_extension(&id, enabled).await.map_err(|e| e.to_string())
+    service
+        .toggle_extension(&id, enabled)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// 扫描扩展目录
@@ -1136,7 +1274,10 @@ async fn toggle_extension(
 async fn scan_extensions(state: State<'_, AppState>) -> Result<Vec<modules::Extension>, String> {
     let extensions_dir = state.app_data_dir.join("Extensions");
     let service = state.extension_service.lock().await;
-    service.scan_extensions_dir(&extensions_dir).await.map_err(|e| e.to_string())
+    service
+        .scan_extensions_dir(&extensions_dir)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// 获取 Profile 启用的扩展
@@ -1146,7 +1287,10 @@ async fn get_profile_extensions(
     state: State<'_, AppState>,
 ) -> Result<Vec<modules::Extension>, String> {
     let service = state.extension_service.lock().await;
-    service.get_profile_extensions(&profile_id).await.map_err(|e| e.to_string())
+    service
+        .get_profile_extensions(&profile_id)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// 为 Profile 启用扩展
@@ -1157,7 +1301,10 @@ async fn enable_extension_for_profile(
     state: State<'_, AppState>,
 ) -> Result<(), String> {
     let service = state.extension_service.lock().await;
-    service.enable_extension_for_profile(&profile_id, &extension_id).await.map_err(|e| e.to_string())
+    service
+        .enable_extension_for_profile(&profile_id, &extension_id)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// 为 Profile 禁用扩展
@@ -1168,9 +1315,11 @@ async fn disable_extension_for_profile(
     state: State<'_, AppState>,
 ) -> Result<(), String> {
     let service = state.extension_service.lock().await;
-    service.disable_extension_for_profile(&profile_id, &extension_id).await.map_err(|e| e.to_string())
+    service
+        .disable_extension_for_profile(&profile_id, &extension_id)
+        .await
+        .map_err(|e| e.to_string())
 }
-
 
 #[cfg(windows)]
 struct EnumWindowsContext {
@@ -1228,7 +1377,7 @@ async fn arrange_windows_grid(columns: u32, state: State<'_, AppState>) -> Resul
             use std::time::Duration;
 
             let mut hwnds = Vec::new();
-            
+
             // 简单的重试逻辑
             for _retry in 0..3 {
                 hwnds = collect_main_windows_for_pids(&pids);
@@ -1237,7 +1386,7 @@ async fn arrange_windows_grid(columns: u32, state: State<'_, AppState>) -> Resul
                 }
                 sleep(Duration::from_secs(1));
             }
-            
+
             if hwnds.is_empty() {
                 return Err("未找到可操作的浏览器窗口".to_string());
             }
@@ -1272,7 +1421,7 @@ async fn arrange_windows_grid(columns: u32, state: State<'_, AppState>) -> Resul
                     );
                 }
             }
-            
+
             Ok(())
         })
         .await
@@ -1291,8 +1440,8 @@ struct ArrangeWindowsConfig {
     columns: u32,
     gap_x: i32,
     gap_y: i32,
-    order: String,  // "asc" | "desc"
-    mode: String,   // "grid" | "diagonal"
+    order: String, // "asc" | "desc"
+    mode: String,  // "grid" | "diagonal"
 }
 
 /// 获取显示器信息
@@ -1312,38 +1461,34 @@ async fn get_monitors() -> Result<Vec<serde_json::Value>, String> {
 
     #[cfg(windows)]
     {
+        use windows::core::PCWSTR;
         use windows::Win32::Graphics::Gdi::{
             EnumDisplayDevicesW, EnumDisplaySettingsW, DEVMODEW, DISPLAY_DEVICEW,
             ENUM_CURRENT_SETTINGS,
         };
-        use windows::core::PCWSTR;
-        
+
         let mut monitors = Vec::new();
         let mut device_index: u32 = 0;
-        
+
         loop {
             let mut display_device: DISPLAY_DEVICEW = unsafe { std::mem::zeroed() };
             display_device.cb = std::mem::size_of::<DISPLAY_DEVICEW>() as u32;
-            
+
             let result = unsafe {
-                EnumDisplayDevicesW(
-                    PCWSTR::null(),
-                    device_index,
-                    &mut display_device,
-                    0,
-                )
+                EnumDisplayDevicesW(PCWSTR::null(), device_index, &mut display_device, 0)
             };
-            
+
             if !result.as_bool() {
                 break;
             }
-            
+
             // 只处理活动的显示设备
-            if (display_device.StateFlags & 0x00000001) != 0 {  // DISPLAY_DEVICE_ATTACHED_TO_DESKTOP
+            if (display_device.StateFlags & 0x00000001) != 0 {
+                // DISPLAY_DEVICE_ATTACHED_TO_DESKTOP
                 // 获取显示设置
                 let mut dev_mode: DEVMODEW = unsafe { std::mem::zeroed() };
                 dev_mode.dmSize = std::mem::size_of::<DEVMODEW>() as u16;
-                
+
                 let settings_result = unsafe {
                     EnumDisplaySettingsW(
                         PCWSTR(display_device.DeviceName.as_ptr()),
@@ -1351,28 +1496,30 @@ async fn get_monitors() -> Result<Vec<serde_json::Value>, String> {
                         &mut dev_mode,
                     )
                 };
-                
+
                 if settings_result.as_bool() {
                     // 获取友好名称（显示器型号）
-                    let friendly_name: Vec<u16> = display_device.DeviceString.iter()
+                    let friendly_name: Vec<u16> = display_device
+                        .DeviceString
+                        .iter()
                         .take_while(|&&c| c != 0)
                         .copied()
                         .collect();
                     let friendly_name_str = String::from_utf16_lossy(&friendly_name);
-                    
+
                     let display_name = if friendly_name_str.is_empty() {
                         format!("显示器 {}", device_index + 1)
                     } else {
                         friendly_name_str
                     };
-                    
+
                     let (pos_x, pos_y) = unsafe {
                         (
                             dev_mode.Anonymous1.Anonymous2.dmPosition.x,
-                            dev_mode.Anonymous1.Anonymous2.dmPosition.y
+                            dev_mode.Anonymous1.Anonymous2.dmPosition.y,
                         )
                     };
-                    
+
                     monitors.push(serde_json::json!({
                         "id": device_index,
                         "name": display_name,
@@ -1383,13 +1530,13 @@ async fn get_monitors() -> Result<Vec<serde_json::Value>, String> {
                     }));
                 }
             }
-            
+
             device_index += 1;
             if device_index > 16 {
-                break;  // 最多16个显示器
+                break; // 最多16个显示器
             }
         }
-        
+
         // 如果没有检测到显示器，返回默认
         if monitors.is_empty() {
             let width = unsafe { GetSystemMetrics(SM_CXSCREEN) };
@@ -1403,7 +1550,7 @@ async fn get_monitors() -> Result<Vec<serde_json::Value>, String> {
                 "y": 0
             })]);
         }
-        
+
         Ok(monitors)
     }
 }
@@ -1434,7 +1581,7 @@ async fn arrange_windows_advanced(
             use std::time::Duration;
 
             let mut hwnds = Vec::new();
-            
+
             for _retry in 0..3 {
                 hwnds = collect_main_windows_for_pids(&pids);
                 if !hwnds.is_empty() {
@@ -1442,7 +1589,7 @@ async fn arrange_windows_advanced(
                 }
                 sleep(Duration::from_secs(1));
             }
-            
+
             if hwnds.is_empty() {
                 return Err("未找到可操作的浏览器窗口".to_string());
             }
@@ -1467,15 +1614,7 @@ async fn arrange_windows_advanced(
                     unsafe {
                         let _ = ShowWindow(*hwnd, SW_RESTORE);
                         let _ = ShowWindow(*hwnd, SW_SHOW);
-                        let _ = SetWindowPos(
-                            *hwnd,
-                            HWND_TOP,
-                            x,
-                            y,
-                            w,
-                            h,
-                            SWP_NOZORDER,
-                        );
+                        let _ = SetWindowPos(*hwnd, HWND_TOP, x, y, w, h, SWP_NOZORDER);
                     }
                 }
             } else {
@@ -1489,19 +1628,11 @@ async fn arrange_windows_advanced(
                     unsafe {
                         let _ = ShowWindow(*hwnd, SW_RESTORE);
                         let _ = ShowWindow(*hwnd, SW_SHOW);
-                        let _ = SetWindowPos(
-                            *hwnd,
-                            HWND_TOP,
-                            x,
-                            y,
-                            w,
-                            h,
-                            SWP_NOZORDER,
-                        );
+                        let _ = SetWindowPos(*hwnd, HWND_TOP, x, y, w, h, SWP_NOZORDER);
                     }
                 }
             }
-            
+
             Ok(())
         })
         .await
@@ -1561,7 +1692,9 @@ async fn show_all_windows(state: State<'_, AppState>) -> Result<(), String> {
 
 /// 获取所有运行中浏览器的窗口详情
 #[tauri::command]
-async fn get_window_details(state: State<'_, AppState>) -> Result<Vec<modules::window_helper::WindowDetail>, String> {
+async fn get_window_details(
+    state: State<'_, AppState>,
+) -> Result<Vec<modules::window_helper::WindowDetail>, String> {
     #[cfg(not(windows))]
     {
         let _ = state;
@@ -1571,14 +1704,14 @@ async fn get_window_details(state: State<'_, AppState>) -> Result<Vec<modules::w
     #[cfg(windows)]
     {
         let pids = state.browser_manager.get_running_pids().await;
-        
+
         // 使用重试机制获取窗口详情
         let details = modules::window_helper::collect_window_details_with_retry(
-            &pids, 
-            3,    // 最多重试3次
-            500   // 每次延迟500ms
-        ).await;
-        
+            &pids, 3,   // 最多重试3次
+            500, // 每次延迟500ms
+        )
+        .await;
+
         Ok(details)
     }
 }
@@ -1601,13 +1734,10 @@ async fn get_profile_window_details(
             Some(p) => p,
             None => return Ok(None),
         };
-        
-        let details = modules::window_helper::collect_window_details_with_retry(
-            &[pid],
-            3,
-            500
-        ).await;
-        
+
+        let details =
+            modules::window_helper::collect_window_details_with_retry(&[pid], 3, 500).await;
+
         Ok(details.into_iter().next())
     }
 }
@@ -1627,15 +1757,15 @@ async fn rename_browser_window(
 
     #[cfg(windows)]
     {
-        let pid = state.browser_manager.get_pid(&profile_id).await
+        let pid = state
+            .browser_manager
+            .get_pid(&profile_id)
+            .await
             .ok_or_else(|| format!("Profile {} 未运行", profile_id))?;
-        
-        let details = modules::window_helper::collect_window_details_with_retry(
-            &[pid],
-            3,
-            500
-        ).await;
-        
+
+        let details =
+            modules::window_helper::collect_window_details_with_retry(&[pid], 3, 500).await;
+
         if let Some(detail) = details.first() {
             modules::window_helper::rename_window(detail.hwnd_ptr, &new_title)?;
             Ok(())
@@ -1659,15 +1789,15 @@ async fn bring_browser_to_front(
 
     #[cfg(windows)]
     {
-        let pid = state.browser_manager.get_pid(&profile_id).await
+        let pid = state
+            .browser_manager
+            .get_pid(&profile_id)
+            .await
             .ok_or_else(|| format!("Profile {} 未运行", profile_id))?;
-        
-        let details = modules::window_helper::collect_window_details_with_retry(
-            &[pid],
-            3,
-            500
-        ).await;
-        
+
+        let details =
+            modules::window_helper::collect_window_details_with_retry(&[pid], 3, 500).await;
+
         if let Some(detail) = details.first() {
             modules::window_helper::bring_window_to_front(detail.hwnd_ptr)?;
             Ok(())
@@ -1691,15 +1821,15 @@ async fn minimize_browser_window(
 
     #[cfg(windows)]
     {
-        let pid = state.browser_manager.get_pid(&profile_id).await
+        let pid = state
+            .browser_manager
+            .get_pid(&profile_id)
+            .await
             .ok_or_else(|| format!("Profile {} 未运行", profile_id))?;
-        
-        let details = modules::window_helper::collect_window_details_with_retry(
-            &[pid],
-            3,
-            500
-        ).await;
-        
+
+        let details =
+            modules::window_helper::collect_window_details_with_retry(&[pid], 3, 500).await;
+
         if let Some(detail) = details.first() {
             modules::window_helper::minimize_window(detail.hwnd_ptr)?;
             Ok(())
@@ -1723,15 +1853,15 @@ async fn restore_browser_window(
 
     #[cfg(windows)]
     {
-        let pid = state.browser_manager.get_pid(&profile_id).await
+        let pid = state
+            .browser_manager
+            .get_pid(&profile_id)
+            .await
             .ok_or_else(|| format!("Profile {} 未运行", profile_id))?;
-        
-        let details = modules::window_helper::collect_window_details_with_retry(
-            &[pid],
-            3,
-            500
-        ).await;
-        
+
+        let details =
+            modules::window_helper::collect_window_details_with_retry(&[pid], 3, 500).await;
+
         if let Some(detail) = details.first() {
             modules::window_helper::restore_window(detail.hwnd_ptr)?;
             Ok(())
@@ -1757,15 +1887,15 @@ async fn move_browser_window(
 
     #[cfg(windows)]
     {
-        let pid = state.browser_manager.get_pid(&profile_id).await
+        let pid = state
+            .browser_manager
+            .get_pid(&profile_id)
+            .await
             .ok_or_else(|| format!("Profile {} 未运行", profile_id))?;
-        
-        let details = modules::window_helper::collect_window_details_with_retry(
-            &[pid],
-            3,
-            500
-        ).await;
-        
+
+        let details =
+            modules::window_helper::collect_window_details_with_retry(&[pid], 3, 500).await;
+
         if let Some(detail) = details.first() {
             modules::window_helper::move_window(detail.hwnd_ptr, x, y)?;
             Ok(())
@@ -1791,15 +1921,15 @@ async fn resize_browser_window(
 
     #[cfg(windows)]
     {
-        let pid = state.browser_manager.get_pid(&profile_id).await
+        let pid = state
+            .browser_manager
+            .get_pid(&profile_id)
+            .await
             .ok_or_else(|| format!("Profile {} 未运行", profile_id))?;
-        
-        let details = modules::window_helper::collect_window_details_with_retry(
-            &[pid],
-            3,
-            500
-        ).await;
-        
+
+        let details =
+            modules::window_helper::collect_window_details_with_retry(&[pid], 3, 500).await;
+
         if let Some(detail) = details.first() {
             modules::window_helper::resize_window(detail.hwnd_ptr, width, height)?;
             Ok(())
@@ -1827,15 +1957,15 @@ async fn set_browser_window_bounds(
 
     #[cfg(windows)]
     {
-        let pid = state.browser_manager.get_pid(&profile_id).await
+        let pid = state
+            .browser_manager
+            .get_pid(&profile_id)
+            .await
             .ok_or_else(|| format!("Profile {} 未运行", profile_id))?;
-        
-        let details = modules::window_helper::collect_window_details_with_retry(
-            &[pid],
-            3,
-            500
-        ).await;
-        
+
+        let details =
+            modules::window_helper::collect_window_details_with_retry(&[pid], 3, 500).await;
+
         if let Some(detail) = details.first() {
             modules::window_helper::set_window_bounds(detail.hwnd_ptr, x, y, width, height)?;
             Ok(())
@@ -1854,10 +1984,13 @@ async fn get_proxy_bridge_stats(
     profile_id: String,
     state: State<'_, AppState>,
 ) -> Result<Option<BridgeStats>, String> {
-    Ok(state.proxy_bridge_manager.get_bridge_stats(&profile_id).await)
+    Ok(state
+        .proxy_bridge_manager
+        .get_bridge_stats(&profile_id)
+        .await)
 }
 
-/// 获取所有代理桥接统计信息
+/// Get all proxy bridge stats
 #[tauri::command]
 async fn get_all_proxy_bridge_stats(
     state: State<'_, AppState>,
@@ -1865,12 +1998,89 @@ async fn get_all_proxy_bridge_stats(
     Ok(state.proxy_bridge_manager.get_all_stats().await)
 }
 
+// ==================== Kernel Download IPC Commands ====================
+
+/// Check if kernel is installed
+#[tauri::command]
+async fn is_kernel_installed(state: State<'_, AppState>) -> Result<bool, String> {
+    let downloader = state.kernel_downloader.lock().await;
+    Ok(downloader.is_kernel_installed())
+}
+
+/// Get installed kernel version info
+#[tauri::command]
+async fn get_kernel_version(
+    state: State<'_, AppState>,
+) -> Result<Option<KernelVersionInfo>, String> {
+    let downloader = state.kernel_downloader.lock().await;
+    Ok(downloader.get_installed_version())
+}
+
+/// Get kernel download progress
+#[tauri::command]
+async fn get_kernel_download_progress(
+    state: State<'_, AppState>,
+) -> Result<DownloadProgress, String> {
+    let downloader = state.kernel_downloader.lock().await;
+    Ok(downloader.get_progress().await)
+}
+
+/// Download and install kernel
+#[tauri::command]
+async fn download_kernel(
+    download_url: String,
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let downloader = state.kernel_downloader.clone();
+
+    // Spawn download task
+    let app_for_progress = app.clone();
+    let app_for_result = app.clone();
+
+    tauri::async_runtime::spawn(async move {
+        let result = {
+            let dl = downloader.lock().await;
+            dl.download_and_install(&download_url, move |progress| {
+                // Emit progress event to frontend
+                let _ = app_for_progress.emit("kernel:download-progress", &progress);
+            })
+            .await
+        };
+
+        match result {
+            Ok(_) => {
+                let _ = app_for_result.emit("kernel:download-complete", ());
+            }
+            Err(e) => {
+                let _ = app_for_result.emit("kernel:download-error", e.to_string());
+            }
+        }
+    });
+
+    Ok(())
+}
+
+/// Uninstall kernel
+#[tauri::command]
+async fn uninstall_kernel(state: State<'_, AppState>) -> Result<(), String> {
+    let downloader = state.kernel_downloader.lock().await;
+    downloader.uninstall().await.map_err(|e| e.to_string())
+}
+
+/// Get kernel executable path
+#[tauri::command]
+async fn get_kernel_path(state: State<'_, AppState>) -> Result<String, String> {
+    let downloader = state.kernel_downloader.lock().await;
+    Ok(downloader.get_kernel_exe_path().display().to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // 使用新的 Logger 模块初始化日志系统
     let log_config = modules::LoggerConfig::default();
     let _guard = modules::Logger::init(log_config);
-    
+
     tracing::info!("Browser Manager starting...");
 
     tauri::Builder::default()
@@ -1886,7 +2096,8 @@ pub fn run() {
             if !template_file.exists() {
                 std::fs::create_dir_all(&template_dir)?;
                 // 内嵌模板文件内容
-                const EMBEDDED_TEMPLATE: &str = include_str!("../data/templates/device_templates.json");
+                const EMBEDDED_TEMPLATE: &str =
+                    include_str!("../data/templates/device_templates.json");
                 std::fs::write(&template_file, EMBEDDED_TEMPLATE)?;
                 tracing::info!("已初始化设备模板文件: {:?}", template_file);
             }
@@ -1898,15 +2109,19 @@ pub fn run() {
             let pool = db.pool().clone();
             let profile_service = ProfileService::new(pool.clone());
             let group_service = GroupService::new(pool.clone());
-            let tag_service = TagService::new(pool.clone());  // ✅ V5 解锁
-            let recycle_bin_service = RecycleBinService::new(pool.clone());  // ✅ V5 解锁
-            let proxy_service = ProxyService::new(pool.clone());  // ✅ V5 升级
-            let extension_service = modules::ExtensionService::new(pool.clone());  // ✅ 扩展管理
-            let proxy_bridge_manager = Arc::new(ProxyBridgeManager::new());  // ✅ P3 代理桥接
-            
-            // 创建 BrowserManager
+            let tag_service = TagService::new(pool.clone()); // ✅ V5 解锁
+            let recycle_bin_service = RecycleBinService::new(pool.clone()); // ✅ V5 解锁
+            let proxy_service = ProxyService::new(pool.clone()); // ✅ V5 升级
+            let extension_service = modules::ExtensionService::new(pool.clone());
+            let proxy_bridge_manager = Arc::new(ProxyBridgeManager::new());
+
+            // Initialize kernel downloader
+            let kernel_dir = app_data_dir.join("kernel").join("win32");
+            let kernel_downloader = Arc::new(Mutex::new(KernelDownloader::new(kernel_dir)));
+
+            // Create BrowserManager
             let browser_manager = Arc::new(BrowserManager::new(app.handle().clone()));
-            
+
             // 启动进程监控任务
             let pool_arc = Arc::new(pool.clone());
             let manager_clone = Arc::clone(&browser_manager);
@@ -1917,11 +2132,12 @@ pub fn run() {
             app.manage(AppState {
                 profile_service: Arc::new(Mutex::new(profile_service)),
                 group_service: Arc::new(Mutex::new(group_service)),
-                tag_service: Arc::new(Mutex::new(tag_service)),  // ✅ V5 解锁
-                recycle_bin_service: Arc::new(Mutex::new(recycle_bin_service)),  // ✅ V5 解锁
-                proxy_service: Arc::new(Mutex::new(proxy_service)),  // ✅ V5 升级
-                extension_service: Arc::new(Mutex::new(extension_service)),  // ✅ 扩展管理
-                proxy_bridge_manager,  // ✅ P3 代理桥接
+                tag_service: Arc::new(Mutex::new(tag_service)),
+                recycle_bin_service: Arc::new(Mutex::new(recycle_bin_service)),
+                proxy_service: Arc::new(Mutex::new(proxy_service)),
+                extension_service: Arc::new(Mutex::new(extension_service)),
+                proxy_bridge_manager,
+                kernel_downloader,
                 pool,
                 browser_manager,
                 app_data_dir,
@@ -2016,9 +2232,16 @@ pub fn run() {
             get_profile_extensions,
             enable_extension_for_profile,
             disable_extension_for_profile,
-            // Proxy Bridge commands - ✅ P3 代理桥接
+            // Proxy Bridge commands
             get_proxy_bridge_stats,
             get_all_proxy_bridge_stats,
+            // Kernel download commands
+            is_kernel_installed,
+            get_kernel_version,
+            get_kernel_download_progress,
+            download_kernel,
+            uninstall_kernel,
+            get_kernel_path,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

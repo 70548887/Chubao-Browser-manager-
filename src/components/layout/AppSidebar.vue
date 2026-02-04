@@ -179,7 +179,7 @@ const handleMenuClick = (item: typeof menuItems[0]) => {
           <div class="user-id">ID: 8847291</div>
         </div>
       </transition>
-      <button v-if="!props.collapsed" class="settings-btn" title="设置">
+      <button v-if="!props.collapsed" class="settings-btn" title="设置" @click="navigateTo?.('settings')">
         <span class="material-symbols-outlined">settings</span>
       </button>
     </div>

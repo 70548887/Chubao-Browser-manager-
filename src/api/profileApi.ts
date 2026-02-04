@@ -136,15 +136,16 @@ function fingerprintToDto(fp: any): any {
             seed: Date.now(),
             platform: fp.navigator.platform || 'windows',
             browser: 'chrome',
-            user_agent: fp.navigator.user_agent,
-            hardware_concurrency: fp.navigator.hardware_concurrency,
-            device_memory: fp.navigator.device_memory,
+            // 兼容 camelCase (userAgent) 和 snake_case (user_agent)
+            user_agent: fp.navigator.userAgent || fp.navigator.user_agent || 'Mozilla/5.0',
+            hardware_concurrency: fp.navigator.hardwareConcurrency || fp.navigator.hardware_concurrency || 8,
+            device_memory: fp.navigator.deviceMemory || fp.navigator.device_memory || 8,
             screen_resolution: `${fp.screen.width}x${fp.screen.height}`,
-            timezone: fp.timezone?.id || 'America/New_York',
-            language: fp.navigator.language,
-            canvas_noise: Array.isArray(fp.canvas?.rgb_noise) && fp.canvas.rgb_noise.length > 0,
+            timezone: fp.timezone?.timezone || fp.timezone?.id || 'America/New_York',
+            language: fp.navigator.languages?.[0] || fp.navigator.language || 'en-US',
+            canvas_noise: fp.canvas?.noiseEnabled ?? true,
             webgl_noise: !!fp.webgl?.vendor,
-            audio_noise: typeof fp.audio?.noise_factor === 'number',
+            audio_noise: fp.audio?.noiseEnabled ?? true,
         }
     }
     

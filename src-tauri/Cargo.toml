@@ -54,11 +54,15 @@ sha2 = "0.10"
 # Base64 encoding (for proxy authentication)
 base64 = "0.22"
 
-# HTTP Client (for proxy health check)
-reqwest = { version = "0.12", default-features = false, features = ["json", "socks", "rustls-tls"] }
+# HTTP Client (for proxy health check and kernel download)
+reqwest = { version = "0.12", default-features = false, features = ["json", "socks", "rustls-tls", "stream"] }
 
 # Async utilities
 futures = "0.3"
+futures-util = "0.3"
+
+# ZIP extraction (for kernel installation)
+zip = "2.2"
 
 # Windows API (for process management)
 [target.'cfg(windows)'.dependencies]

@@ -62,11 +62,11 @@ pub async fn init_database(db_path: &Path) -> Result<Database> {
 
     // 使用绝对路径格式（Windows 兼容）
     let database_url = if cfg!(windows) {
-        // Windows: sqlite:///C:/path/to/db.db (三个斜杠)
-        format!("sqlite:///{}", db_path.display().to_string().replace("\\", "/"))
+        // Windows: sqlite:///C:/path/to/db.db?mode=rwc (三个斜杠，mode=rwc 表示读写创建)
+        format!("sqlite:///{}?mode=rwc", db_path.display().to_string().replace("\\", "/"))
     } else {
-        // Unix: sqlite:///path/to/db.db
-        format!("sqlite://{}", db_path.display())
+        // Unix: sqlite:///path/to/db.db?mode=rwc
+        format!("sqlite://{}?mode=rwc", db_path.display())
     };
     
     info!("Database URL: {}", database_url);

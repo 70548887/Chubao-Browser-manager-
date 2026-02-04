@@ -1,10 +1,24 @@
 // Fingerprint Generator - 指纹生成器核心模块
 // 整合所有组件生成完整的设备指纹配置
+// 格式与 Chromium 内核 fingerprint_browser 模块兼容
 
 use super::templates::{TemplateManager, ResolutionOption};
 use super::seed_manager::{SeedManager};
 use super::noise::{WebGLNoiseGenerator, CanvasNoiseGenerator, AudioNoiseGenerator};
-use crate::modules::config_writer::*;
+use crate::modules::config_writer::{
+    FingerprintFileConfig,
+    KernelUaConfig,
+    KernelResourceInfoConfig,
+    KernelResolutionConfig,
+    KernelTimeZoneConfig,
+    KernelLanguageConfig,
+    KernelWebGLDeviceConfig,
+    KernelCanvasConfig,
+    KernelAudioContextConfig,
+    KernelFontConfig,
+    KernelClientRectsConfig,
+    KernelMediaDevicesConfig,
+};
 use rand::{SeedableRng};
 use rand::rngs::StdRng;
 use std::path::Path;
@@ -24,19 +38,19 @@ impl FingerprintGenerator {
         Ok(Self { template_manager })
     }
     
-    /// 生成完整指纹配置
+    /// 生成完整指纹配置（匹配内核 bm_fingerprint.json 格式）
     /// 
     /// # Arguments
     /// * `profile_id` - Profile 唯一标识（必须由外部提供）
     /// * `platform` - 目标平台（可选：windows/macos/android/ios）
-    /// * `browser_version` - 浏览器版本（可选：146/145/144等）
+    /// * `browser_version` - 浏览器版本（可选：139/146等）
     /// 
     /// # Returns
     /// 完整的指纹配置，可直接写入 bm_fingerprint.json
     pub fn generate(&self, profile_id: &str, platform: Option<&str>, browser_version: Option<&str>) -> FingerprintFileConfig {
         // 获取平台和版本参数
         let target_platform = platform.unwrap_or("windows");
-        let target_version = browser_version.unwrap_or("146");
+        let target_version = browser_version.unwrap_or("139");
         
         // 1. 创建种子管理器
         let mut seed_manager = SeedManager::from_profile_id(profile_id);
@@ -63,149 +77,79 @@ impl FingerprintGenerator {
         // 根据平台和版本生成 User-Agent
         let user_agent = self.generate_user_agent(target_platform, target_version, &resolution);
         
-        // 5. 生成噪声
+        // 5. 生成噪声参数
         let _webgl_noise = WebGLNoiseGenerator::generate(derived_seeds.webgl);
         let _canvas_noise = CanvasNoiseGenerator::generate_compact(derived_seeds.canvas);
-        let audio_noise = AudioNoiseGenerator::generate(derived_seeds.audio);
+        let _audio_noise = AudioNoiseGenerator::generate(derived_seeds.audio);
         
-        // 6. 构建完整配置
+        // 6. 构建完整配置（匹配内核格式）
         FingerprintFileConfig {
-            schema: "bm_fingerprint_v2".to_string(),
-            schema_version: 2,
-            profile_id: profile_id.to_string(),
-            created_at: chrono::Utc::now().to_rfc3339(),
-            signature: None,
+            init: 2,
             
-            seed: SeedConfig {
-                master: derived_seeds.master as i64,
-                canvas: derived_seeds.canvas as i64,
-                webgl: derived_seeds.webgl as i64,
-                audio: derived_seeds.audio as i64,
+            ua: KernelUaConfig {
+                config_type: 2,
+                user_agent: user_agent.clone(),
             },
             
-            navigator: NavigatorConfig {
-                user_agent: user_agent.clone(),
-                platform: self.get_navigator_platform(target_platform),
-                hardware_concurrency: cores,
-                device_memory: memory,
-                language: language_primary.clone(),
+            resource_info: KernelResourceInfoConfig {
+                config_type: 2,
+                cpu: cores,
+                memory: memory as f32,
+            },
+            
+            resolution: KernelResolutionConfig {
+                config_type: 2,
+                monitor_width: resolution.width,
+                monitor_height: resolution.height,
+                color_depth: 24,
+                avail_width: resolution.width,
+                avail_height: resolution.height.saturating_sub(40),
+            },
+            
+            time_zone: KernelTimeZoneConfig {
+                config_type: 2,
+                gmt: timezone.clone(),
+            },
+            
+            language: KernelLanguageConfig {
+                config_type: 2,
+                interface_language: language_primary.clone(),
                 languages: {
                     let mut langs = vec![language_primary.clone()];
                     langs.extend(language_fallback.clone());
                     langs
                 },
-                vendor: "Google Inc.".to_string(),
-                app_version: format!("5.0 ({}) AppleWebKit/537.36", self.get_navigator_platform(target_platform)),
-                max_touch_points: self.get_max_touch_points(target_platform),
-                do_not_track: None,
-                webdriver: false,
-                pdf_viewer_enabled: true,
-                cookie_enabled: true,
             },
             
-            screen: ScreenConfig {
-                width: resolution.width,
-                height: resolution.height,
-                avail_width: resolution.width,
-                avail_height: resolution.height - 40,
-                color_depth: 24,
-                pixel_depth: 24,
-                device_pixel_ratio: 1.0,
-                orientation_type: "landscape-primary".to_string(),
-                orientation_angle: 0,
-            },
-            
-            webgl: WebGLConfig {
-                vendor: gpu_model.webgl_vendor.clone(),
+            webgl_device: KernelWebGLDeviceConfig {
+                config_type: 2,
+                vendors: gpu_model.webgl_vendor.clone(),
                 renderer: gpu_model.webgl_renderer.clone(),
-                unmasked_vendor: gpu_model.unmasked_vendor.clone(),
-                unmasked_renderer: gpu_model.unmasked_renderer.clone(),
-                noise_enabled: true,
-                version: "WebGL 1.0 (OpenGL ES 2.0 Chromium)".to_string(),
-                shading_language_version: "WebGL GLSL ES 1.0 (OpenGL ES GLSL ES 1.0 Chromium)".to_string(),
-                max_texture_size: 16384,
-                max_vertex_attribs: 16,
             },
             
-            timezone: TimezoneConfig {
-                id: timezone.clone(),
-                offset_minutes: self.timezone_to_offset(&timezone),
+            canvas: KernelCanvasConfig {
+                config_type: 2,
+                noise_enabled: Some(true),
+                noise_factor: Some(0.001),
             },
             
-            fonts: FontsConfig {
-                mode: template.fonts.mode.clone(),
-                list: template.fonts.common_fonts.clone(),
+            audio_context: KernelAudioContextConfig {
+                config_type: 2,
+                noise_enabled: Some(true),
+                noise: None,
             },
             
-            canvas: CanvasConfig {
-                mode: "noise".to_string(),
-                noise_level: audio_noise.noise_factor as f64,
+            font: KernelFontConfig {
+                config_type: 2,
+                fonts: template.fonts.common_fonts.clone(),
             },
             
-            audio: AudioConfig {
-                mode: "noise".to_string(),
-                sample_rate: 44100,
-                max_channel_count: 2,
+            client_rects: KernelClientRectsConfig {
+                config_type: 2,
             },
             
-            webrtc: WebRTCConfig {
-                mode: "disabled".to_string(),
-                public_ip: None,
-                local_ip: None,
-            },
-            
-            geolocation: GeolocationConfig::default(),
-            client_hints: Self::build_client_hints(&user_agent, target_platform),
-            battery: BatteryConfig::default(),
-            network: NetworkConfig::default(),
-            privacy: PrivacyConfig::default(),
-            device: DeviceConfig::default(),
+            media_devices: KernelMediaDevicesConfig::default(),
         }
-    }
-    
-    /// 从 User-Agent 构建 Client Hints（保持版本一致性）
-    fn build_client_hints(user_agent: &str, platform: &str) -> ClientHintsConfig {
-        // 提取 Chrome 版本号
-        let chrome_version = Self::extract_chrome_version(user_agent).unwrap_or("146".to_string());
-        let full_version = format!("{}.0.0.0", chrome_version);
-        
-        // 根据平台参数设置
-        let (platform_name, platform_version, is_mobile, arch, bitness) = match platform {
-            "windows" => ("Windows".to_string(), "10.0.0".to_string(), false, "x86".to_string(), "64".to_string()),
-            "macos" => ("macOS".to_string(), "13.0.0".to_string(), false, "arm".to_string(), "64".to_string()),
-            "android" => ("Android".to_string(), "14.0.0".to_string(), true, "arm".to_string(), "64".to_string()),
-            "ios" => ("iOS".to_string(), "17.4.0".to_string(), true, "arm".to_string(), "64".to_string()),
-            "linux" => ("Linux".to_string(), "6.0.0".to_string(), false, "x86".to_string(), "64".to_string()),
-            _ => ("Windows".to_string(), "10.0.0".to_string(), false, "x86".to_string(), "64".to_string()),
-        };
-        
-        ClientHintsConfig {
-            brands: vec![
-                ClientHintsBrand { brand: "Not_A Brand".to_string(), version: "8".to_string() },
-                ClientHintsBrand { brand: "Chromium".to_string(), version: chrome_version.clone() },
-                ClientHintsBrand { brand: "Google Chrome".to_string(), version: chrome_version },
-            ],
-            full_version,
-            platform: platform_name,
-            platform_version,
-            architecture: arch,
-            bitness,
-            model: if is_mobile { "SM-S928B".to_string() } else { "".to_string() },
-            mobile: is_mobile,
-            wow64: false,
-        }
-    }
-    
-    /// 从 User-Agent 提取 Chrome 版本号
-    fn extract_chrome_version(user_agent: &str) -> Option<String> {
-        // 示例: "Chrome/134.0.0.0"
-        if let Some(start) = user_agent.find("Chrome/") {
-            let version_str = &user_agent[start + 7..];
-            if let Some(end) = version_str.find('.') {
-                return Some(version_str[..end].to_string());
-            }
-        }
-        None
     }
     
     /// 从模板随机选择
@@ -283,14 +227,6 @@ impl FingerprintGenerator {
             "ios" => "iPhone".to_string(),
             "linux" => "Linux x86_64".to_string(),
             _ => "Win32".to_string(),
-        }
-    }
-    
-    /// 获取触摸点数量
-    fn get_max_touch_points(&self, platform: &str) -> u32 {
-        match platform {
-            "android" | "ios" => 5,  // 移动设备支持多点触摸
-            _ => 0,  // 桌面设备默认不支持
         }
     }
     

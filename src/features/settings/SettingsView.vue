@@ -9,6 +9,88 @@
           <p class="section-description">配置浏览器内核可执行文件路径</p>
         </div>
 
+        <!-- 内核状态卡片 -->
+        <div class="kernel-status-card">
+          <div class="kernel-info">
+            <div class="kernel-icon" :class="{ installed: kernelInstalled }">
+              {{ kernelInstalled ? '✓' : '!' }}
+            </div>
+            <div class="kernel-details">
+              <div class="kernel-title">
+                {{ kernelInstalled ? '内核已安装' : '内核未安装' }}
+              </div>
+              <div v-if="kernelVersion" class="kernel-version">
+                版本: {{ kernelVersion.version }} | {{ kernelVersion.platform }}
+              </div>
+              <div v-else-if="!kernelInstalled" class="kernel-version">
+                请下载或选择内核文件
+              </div>
+            </div>
+          </div>
+          
+          <!-- 下载进度条 -->
+          <div v-if="isDownloading" class="download-progress">
+            <div class="progress-bar">
+              <div 
+                class="progress-fill" 
+                :style="{ width: downloadPercent + '%' }"
+              ></div>
+            </div>
+            <div class="progress-info">
+              <span>{{ downloadProgress?.message || '准备下载...' }}</span>
+              <span>{{ formatSpeed(downloadProgress?.speed || 0) }}</span>
+            </div>
+          </div>
+          
+          <!-- 操作按钮 -->
+          <div class="kernel-actions">
+            <button 
+              v-if="!kernelInstalled && !isDownloading" 
+              class="btn-download" 
+              @click="handleDownloadKernel"
+            >
+              <span class="icon">⬇</span>
+              下载内核
+            </button>
+            <button 
+              v-if="isDownloading" 
+              class="btn-cancel-download" 
+              disabled
+            >
+              <span class="icon loading">⏳</span>
+              下载中...
+            </button>
+            <button 
+              v-if="kernelInstalled" 
+              class="btn-use-kernel" 
+              @click="useInstalledKernel"
+            >
+              <span class="icon">✓</span>
+              使用此内核
+            </button>
+          </div>
+        </div>
+
+        <!-- 自定义内核下载地址 -->
+        <div class="setting-item">
+          <label class="setting-label">内核下载地址</label>
+          <div class="setting-input-group">
+            <input
+              v-model="customKernelUrl"
+              type="text"
+              class="setting-input"
+              placeholder="输入自定义内核下载地址，或使用默认地址"
+            />
+            <button class="btn-select" @click="resetKernelUrl">
+              <span class="icon">↺</span>
+              重置
+            </button>
+          </div>
+          <p class="setting-hint">
+            默认从 GitHub Releases 下载，如下载缓慢可使用镜像地址
+          </p>
+        </div>
+
         <div class="setting-item">
           <label class="setting-label">
             内核路径
@@ -91,32 +173,145 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { open as openDialog } from '@tauri-apps/plugin-dialog'
 import * as settingsApi from '@/api/settingsApi'
+import * as kernelApi from '@/api/kernelApi'
+import type { DownloadProgress, KernelVersionInfo } from '@/api/kernelApi'
 
-// 设置数据
+// Settings data
 const settings = ref({
   kernelPath: '',
   userDataDir: '',
   defaultProxy: ''
 })
 
-// 原始设置（用于重置）
+// Original settings (for reset)
 const originalSettings = ref({ ...settings.value })
 
-// 加载和保存状态
+// Loading and saving state
 const isLoading = ref(false)
 const isSaving = ref(false)
 
-// 验证设置是否有效
+// Kernel download state
+const kernelInstalled = ref(false)
+const kernelVersion = ref<KernelVersionInfo | null>(null)
+const isDownloading = ref(false)
+const downloadProgress = ref<DownloadProgress | null>(null)
+const customKernelUrl = ref(kernelApi.DEFAULT_KERNEL_URL)
+
+// Event unsubscribe functions
+let unlistenProgress: (() => void) | null = null
+let unlistenComplete: (() => void) | null = null
+let unlistenError: (() => void) | null = null
+
+// Calculate download percentage
+const downloadPercent = computed(() => {
+  if (!downloadProgress.value || !downloadProgress.value.total) return 0
+  return Math.round((downloadProgress.value.downloaded / downloadProgress.value.total) * 100)
+})
+
+// Format download speed
+const formatSpeed = (bytesPerSec: number): string => {
+  if (bytesPerSec < 1024) return `${bytesPerSec} B/s`
+  if (bytesPerSec < 1024 * 1024) return `${(bytesPerSec / 1024).toFixed(1)} KB/s`
+  return `${(bytesPerSec / (1024 * 1024)).toFixed(1)} MB/s`
+}
+
+// Validate settings
 const isValid = computed(() => {
-  // 内核路径必填
   return settings.value.kernelPath.trim() !== ''
 })
 
-// 选择内核路径
+// Check kernel status
+const checkKernelStatus = async () => {
+  try {
+    kernelInstalled.value = await kernelApi.isKernelInstalled()
+    if (kernelInstalled.value) {
+      kernelVersion.value = await kernelApi.getKernelVersion()
+    }
+  } catch (error) {
+    console.error('Failed to check kernel status:', error)
+  }
+}
+
+// Reset kernel URL to default
+const resetKernelUrl = () => {
+  customKernelUrl.value = kernelApi.DEFAULT_KERNEL_URL
+  ElMessage.info('已重置为默认下载地址')
+}
+
+// Handle kernel download
+const handleDownloadKernel = async () => {
+  if (!customKernelUrl.value.trim()) {
+    ElMessage.warning('请输入内核下载地址')
+    return
+  }
+
+  isDownloading.value = true
+  downloadProgress.value = {
+    downloaded: 0,
+    total: null,
+    speed: 0,
+    status: 'Downloading',
+    message: '准备下载...'
+  }
+
+  try {
+    await kernelApi.downloadKernel(customKernelUrl.value)
+  } catch (error) {
+    isDownloading.value = false
+    ElMessage.error('启动下载失败: ' + error)
+  }
+}
+
+// Use installed kernel
+const useInstalledKernel = async () => {
+  try {
+    const kernelPath = await kernelApi.getKernelPath()
+    settings.value.kernelPath = kernelPath
+    ElMessage.success('已设置为已安装的内核路径')
+  } catch (error) {
+    ElMessage.error('获取内核路径失败')
+  }
+}
+
+// Setup event listeners
+const setupEventListeners = async () => {
+  unlistenProgress = await kernelApi.onDownloadProgress((progress) => {
+    downloadProgress.value = progress
+  })
+
+  unlistenComplete = await kernelApi.onDownloadComplete(async () => {
+    isDownloading.value = false
+    downloadProgress.value = null
+    await checkKernelStatus()
+    
+    // Auto-set kernel path
+    if (kernelInstalled.value) {
+      const kernelPath = await kernelApi.getKernelPath()
+      settings.value.kernelPath = kernelPath
+    }
+    
+    ElMessage.success('内核下载安装完成！')
+  })
+
+  unlistenError = await kernelApi.onDownloadError((error) => {
+    isDownloading.value = false
+    downloadProgress.value = null
+    ElMessage.error('下载失败: ' + error)
+  })
+}
+
+// Cleanup event listeners
+const cleanupEventListeners = () => {
+  if (unlistenProgress) unlistenProgress()
+  if (unlistenComplete) unlistenComplete()
+  if (unlistenError) unlistenError()
+}
+
+// Select kernel path
 const selectKernelPath = async () => {
   try {
     const selected = await openDialog({
@@ -137,7 +332,7 @@ const selectKernelPath = async () => {
   }
 }
 
-// 选择用户数据目录
+// Select user data directory
 const selectUserDataDir = async () => {
   try {
     const selected = await openDialog({
@@ -154,7 +349,7 @@ const selectUserDataDir = async () => {
   }
 }
 
-// 加载设置
+// Load settings
 const loadSettings = async () => {
   isLoading.value = true
   try {
@@ -173,7 +368,7 @@ const loadSettings = async () => {
   }
 }
 
-// 保存设置
+// Save settings
 const handleSave = async () => {
   if (!isValid.value) {
     ElMessage.warning('请填写必填项')
@@ -182,7 +377,6 @@ const handleSave = async () => {
 
   isSaving.value = true
   try {
-    // 保存各项设置
     await settingsApi.setSettingValue('kernel_path', settings.value.kernelPath)
     
     if (settings.value.userDataDir) {
@@ -203,15 +397,22 @@ const handleSave = async () => {
   }
 }
 
-// 重置设置
+// Reset settings
 const handleReset = () => {
   settings.value = { ...originalSettings.value }
   ElMessage.info('已重置为上次保存的设置')
 }
 
-// 初始化
-onMounted(() => {
-  loadSettings()
+// Initialize
+onMounted(async () => {
+  await loadSettings()
+  await checkKernelStatus()
+  await setupEventListeners()
+})
+
+// Cleanup
+onUnmounted(() => {
+  cleanupEventListeners()
 })
 </script>
 
@@ -270,6 +471,134 @@ onMounted(() => {
   font-size: 13px;
   color: var(--text-secondary);
   margin: 0;
+}
+
+// Kernel status card styles
+.kernel-status-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+}
+
+.kernel-info {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+}
+
+.kernel-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: bold;
+  background: var(--color-warning);
+  color: white;
+
+  &.installed {
+    background: var(--color-success);
+  }
+}
+
+.kernel-details {
+  flex: 1;
+}
+
+.kernel-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.kernel-version {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.download-progress {
+  margin-bottom: var(--spacing-md);
+}
+
+.progress-bar {
+  height: 8px;
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--color-primary), var(--color-primary-hover));
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.progress-info {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: var(--spacing-xs);
+}
+
+.kernel-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+.btn-download,
+.btn-cancel-download,
+.btn-use-kernel {
+  height: 32px;
+  padding: 0 var(--spacing-md);
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  border: none;
+
+  .icon {
+    font-size: 14px;
+
+    &.loading {
+      animation: spin 1s linear infinite;
+    }
+  }
+}
+
+.btn-download {
+  background: var(--color-primary);
+  color: white;
+
+  &:hover {
+    background: var(--color-primary-hover);
+  }
+}
+
+.btn-cancel-download {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  cursor: not-allowed;
+}
+
+.btn-use-kernel {
+  background: var(--color-success);
+  color: white;
+
+  &:hover {
+    filter: brightness(1.1);
+  }
 }
 
 .setting-item {
