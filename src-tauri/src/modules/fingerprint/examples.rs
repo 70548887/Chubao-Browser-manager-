@@ -11,7 +11,7 @@ pub fn example_basic_generation() -> Result<(), String> {
     
     // 2. 生成指纹（使用 profile_id）
     let profile_id = "test-profile-12345";
-    let fingerprint_config = generator.generate(profile_id);
+    let fingerprint_config = generator.generate(profile_id, None, None);
     
     // 3. 打印指纹信息
     println!("Profile ID: {}", fingerprint_config.profile_id);
@@ -20,7 +20,7 @@ pub fn example_basic_generation() -> Result<(), String> {
     println!("Screen: {}x{}", fingerprint_config.screen.width, fingerprint_config.screen.height);
     println!("CPU Cores: {}", fingerprint_config.navigator.hardware_concurrency);
     println!("Memory: {} GB", fingerprint_config.navigator.device_memory);
-    println!("Timezone: {}", fingerprint_config.timezone.id);
+    println!("Timezone: {}", fingerprint_config.timezone.timezone);
     
     Ok(())
 }
@@ -35,7 +35,7 @@ pub fn example_write_fingerprint() -> Result<(), String> {
     
     // 2. 生成指纹
     let profile_id = "test-profile-12345";
-    let fingerprint_config = generator.generate(profile_id);
+    let fingerprint_config = generator.generate(profile_id, None, None);
     
     // 3. 写入文件
     let user_data_dir = PathBuf::from(r"F:\test\profiles\test-profile-12345");
@@ -54,19 +54,14 @@ pub fn example_deterministic() -> Result<(), String> {
     let profile_id = "deterministic-test";
     
     // 生成两次
-    let fp1 = generator.generate(profile_id);
-    let fp2 = generator.generate(profile_id);
-    
-    // 验证种子相同
-    assert_eq!(fp1.seed.master, fp2.seed.master);
-    assert_eq!(fp1.seed.canvas, fp2.seed.canvas);
-    assert_eq!(fp1.seed.webgl, fp2.seed.webgl);
-    assert_eq!(fp1.seed.audio, fp2.seed.audio);
+    let fp1 = generator.generate(profile_id, None, None);
+    let fp2 = generator.generate(profile_id, None, None);
     
     // 验证核心指纹相同
     assert_eq!(fp1.navigator.user_agent, fp2.navigator.user_agent);
     assert_eq!(fp1.screen.width, fp2.screen.width);
     assert_eq!(fp1.navigator.hardware_concurrency, fp2.navigator.hardware_concurrency);
+    assert_eq!(fp1.timezone.timezone, fp2.timezone.timezone);
     
     println!("✅ 确定性测试通过：相同 profile_id 生成相同指纹");
     
@@ -85,7 +80,7 @@ pub async fn example_create_profile_with_fingerprint(
     // 2. 生成指纹
     let template_path = PathBuf::from("data/templates/device_templates.json");
     let generator = FingerprintGenerator::new(template_path)?;
-    let fingerprint_config = generator.generate(&profile_id);
+    let fingerprint_config = generator.generate(&profile_id, None, None);
     
     // 3. 准备用户数据目录
     let user_data_dir = PathBuf::from(r"F:\DeepChrome\profiles").join(&profile_id);

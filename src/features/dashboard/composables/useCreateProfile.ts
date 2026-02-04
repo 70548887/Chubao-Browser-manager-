@@ -174,7 +174,7 @@ export function useCreateProfile(emit: {
   // 表单数据
   const formData = reactive<CreateProfileFormData>({
     // 第一步：窗口信息
-    name: '',
+    name: `窗口_${Date.now().toString(36).toUpperCase()}`,  // 自动生成名称
     group: 'default',
     tagIds: [],  // 标签 ID 列表
     cookie: '',
@@ -417,7 +417,7 @@ export function useCreateProfile(emit: {
   // 重置表单
   const resetForm = () => {
     currentStep.value = 1
-    formData.name = ''
+    formData.name = `窗口_${Date.now().toString(36).toUpperCase()}`  // 重新生成名称
     formData.group = 'default'
     formData.cookie = ''
     formData.remark = ''

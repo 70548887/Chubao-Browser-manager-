@@ -1,11 +1,25 @@
 // Fingerprint Generator - 指纹生成器核心模块
-// 整合所有组件生成完整的设备指纹配置（适配内核格式）
+// 整合所有组件生成完整的设备指纹配置
+// 格式与 Chromium 内核 fingerprint_browser 模块兼容
 
 use super::templates::{TemplateManager, ResolutionOption};
-use super::seed_manager::SeedManager;
+use super::seed_manager::{SeedManager};
 use super::noise::{WebGLNoiseGenerator, CanvasNoiseGenerator, AudioNoiseGenerator};
-use crate::modules::config_writer::*;
-use rand::SeedableRng;
+use crate::modules::config_writer::{
+    FingerprintFileConfig,
+    KernelUaConfig,
+    KernelResourceInfoConfig,
+    KernelResolutionConfig,
+    KernelTimeZoneConfig,
+    KernelLanguageConfig,
+    KernelWebGLDeviceConfig,
+    KernelCanvasConfig,
+    KernelAudioContextConfig,
+    KernelFontConfig,
+    KernelClientRectsConfig,
+    KernelMediaDevicesConfig,
+};
+use rand::{SeedableRng};
 use rand::rngs::StdRng;
 use std::path::Path;
 
@@ -16,15 +30,27 @@ pub struct FingerprintGenerator {
 
 impl FingerprintGenerator {
     /// 创建指纹生成器
+    /// 
+    /// # Arguments
+    /// * `template_path` - 设备模板文件路径
     pub fn new<P: AsRef<Path>>(template_path: P) -> Result<Self, String> {
         let template_manager = TemplateManager::load_from_file(template_path)?;
         Ok(Self { template_manager })
     }
     
-    /// 生成完整指纹配置（内核格式）
+    /// 生成完整指纹配置（匹配内核 bm_fingerprint.json 格式）
+    /// 
+    /// # Arguments
+    /// * `profile_id` - Profile 唯一标识（必须由外部提供）
+    /// * `platform` - 目标平台（可选：windows/macos/android/ios）
+    /// * `browser_version` - 浏览器版本（可选：139/146等）
+    /// 
+    /// # Returns
+    /// 完整的指纹配置，可直接写入 bm_fingerprint.json
     pub fn generate(&self, profile_id: &str, platform: Option<&str>, browser_version: Option<&str>) -> FingerprintFileConfig {
+        // 获取平台和版本参数
         let target_platform = platform.unwrap_or("windows");
-        let target_version = browser_version.unwrap_or("146");
+        let target_version = browser_version.unwrap_or("139");
         
         // 1. 创建种子管理器
         let mut seed_manager = SeedManager::from_profile_id(profile_id);
@@ -45,110 +71,106 @@ impl FingerprintGenerator {
             &mut rng
         );
         
-        // 根据平台选择一致的时区和语言
+        // 根据平台选择一致的时区和语言（保持地理一致性）
         let (timezone, language_primary, language_fallback) = self.get_locale_for_platform(target_platform);
         
         // 根据平台和版本生成 User-Agent
         let user_agent = self.generate_user_agent(target_platform, target_version, &resolution);
         
-        // 5. 生成噪声
+        // 5. 生成噪声参数
         let _webgl_noise = WebGLNoiseGenerator::generate(derived_seeds.webgl);
         let _canvas_noise = CanvasNoiseGenerator::generate_compact(derived_seeds.canvas);
-        let audio_noise = AudioNoiseGenerator::generate(derived_seeds.audio);
+        let _audio_noise = AudioNoiseGenerator::generate(derived_seeds.audio);
         
-        // 6. 构建内核格式配置
+        // 6. 构建完整配置（匹配内核格式）
         FingerprintFileConfig {
-            init: 2,  // 启用指纹功能
+            init: 2,
             
-            ua: UaConfig {
-                r#type: 2,
-                user_agent,
+            ua: KernelUaConfig {
+                config_type: 2,
+                user_agent: user_agent.clone(),
             },
             
-            resource_info: ResourceInfoConfig {
-                r#type: 2,
+            resource_info: KernelResourceInfoConfig {
+                config_type: 2,
                 cpu: cores,
-                memory: memory as f64,
+                memory: memory as f32,
             },
             
-            resolution: ResolutionConfig {
-                r#type: 2,
+            resolution: KernelResolutionConfig {
+                config_type: 2,
                 monitor_width: resolution.width,
                 monitor_height: resolution.height,
-                avail_width: resolution.width,
-                avail_height: resolution.height - 40,
                 color_depth: 24,
+                avail_width: resolution.width,
+                avail_height: resolution.height.saturating_sub(40),
             },
             
-            time_zone: TimeZoneConfig {
-                r#type: 2,
-                gmt: timezone,
+            time_zone: KernelTimeZoneConfig {
+                config_type: 2,
+                gmt: timezone.clone(),
             },
             
-            language: LanguageConfig {
-                r#type: 2,
+            language: KernelLanguageConfig {
+                config_type: 2,
                 interface_language: language_primary.clone(),
                 languages: {
-                    let mut langs = vec![language_primary];
-                    langs.extend(language_fallback);
+                    let mut langs = vec![language_primary.clone()];
+                    langs.extend(language_fallback.clone());
                     langs
                 },
             },
             
-            web_gl_device: WebGLDeviceConfig {
-                r#type: 2,
+            webgl_device: KernelWebGLDeviceConfig {
+                config_type: 2,
                 vendors: gpu_model.webgl_vendor.clone(),
                 renderer: gpu_model.webgl_renderer.clone(),
             },
             
-            canvas: CanvasConfig {
-                r#type: 2,
-                noise_enabled: true,
-                noise_factor: audio_noise.noise_factor as f64,
+            canvas: KernelCanvasConfig {
+                config_type: 2,
+                noise_enabled: Some(true),
+                noise_factor: Some(0.001),
             },
             
-            audio_context: AudioContextConfig {
-                r#type: 2,
-                noise: vec![0.0001, 0.0002, 0.0001],
+            audio_context: KernelAudioContextConfig {
+                config_type: 2,
+                noise_enabled: Some(true),
+                noise: None,
             },
             
-            client_rects: ClientRectsConfig {
-                r#type: 2,
-                x: 0.0001,
-                y: 0.0001,
-                width: 0.0001,
-                height: 0.0001,
+            font: KernelFontConfig {
+                config_type: 2,
+                fonts: template.fonts.common_fonts.clone(),
             },
             
-            location: LocationConfig {
-                r#type: 0,  // 默认禁用
-                permissions: false,
-                latitude: None,
-                longitude: None,
-                accuracy: None,
+            client_rects: KernelClientRectsConfig {
+                config_type: 2,
             },
             
-            webrtc: None,
-            fonts: Some(FontsConfig {
-                r#type: 2,
-                mode: template.fonts.mode.clone(),
-                list: template.fonts.common_fonts.clone(),
-            }),
-            variations: Some(VariationsConfig {
-                r#type: 2,
-                enabled: true,
-                seed_id: derived_seeds.master.to_string(),
-                seed_type: "profile_based".to_string(),
-                field_trials: vec![],
-                enabled_features: vec![],
-                disabled_features: vec!["AutofillServerCommunication".to_string()],
-            }),
+            media_devices: KernelMediaDevicesConfig::default(),
         }
     }
     
     /// 从模板随机选择
     fn pick_random<T: Clone>(&self, options: &[T], rng: &mut StdRng) -> T {
         self.template_manager.pick_random(options, rng)
+    }
+    
+    /// 时区 ID 转偏移量（分钟）
+    fn timezone_to_offset(&self, timezone: &str) -> i32 {
+        match timezone {
+            "Asia/Shanghai" | "Asia/Hong_Kong" => -480,
+            "Asia/Tokyo" => -540,
+            "Asia/Seoul" => -540,
+            "America/New_York" => 300,
+            "America/Los_Angeles" => 480,
+            "America/Chicago" => 360,
+            "Europe/London" => 0,
+            "Europe/Paris" | "Europe/Berlin" => -60,
+            "UTC" => 0,
+            _ => -480, // 默认 UTC+8
+        }
     }
     
     /// 根据平台和版本生成 User-Agent
@@ -167,12 +189,14 @@ impl FingerprintGenerator {
                 )
             }
             "android" => {
+                // Android 使用移动版 User-Agent
                 format!(
                     "Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{}.0.0.0 Mobile Safari/537.36",
                     version
                 )
             }
             "ios" => {
+                // iOS 使用 Safari 或 Chrome
                 format!(
                     "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/{}.0.0.0 Mobile/15E148 Safari/604.1",
                     version
@@ -185,6 +209,7 @@ impl FingerprintGenerator {
                 )
             }
             _ => {
+                // 默认 Windows
                 format!(
                     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{}.0.0.0 Safari/537.36",
                     version
@@ -193,7 +218,20 @@ impl FingerprintGenerator {
         }
     }
     
+    /// 获取 navigator.platform 值
+    fn get_navigator_platform(&self, platform: &str) -> String {
+        match platform {
+            "windows" => "Win32".to_string(),
+            "macos" => "MacIntel".to_string(),
+            "android" => "Linux armv81".to_string(),
+            "ios" => "iPhone".to_string(),
+            "linux" => "Linux x86_64".to_string(),
+            _ => "Win32".to_string(),
+        }
+    }
+    
     /// 根据平台获取一致的时区和语言配置
+    /// 确保时区、语言、平台三者地理一致，避免检测
     fn get_locale_for_platform(&self, platform: &str) -> (String, String, Vec<String>) {
         match platform {
             "windows" => (

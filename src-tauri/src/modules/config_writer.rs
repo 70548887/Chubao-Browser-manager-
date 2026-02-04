@@ -1,137 +1,371 @@
 // 配置文件写入器 - 生成 bm_fingerprint.json 和 bm_cloud.json
-// 适配内核 JSON 格式规范（驼峰命名，type 字段）
+// 格式与 Chromium 内核 fingerprint_browser 模块兼容
 
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::fs;
+use chrono::{DateTime, Utc};
 
 // ============================================================================
-// bm_fingerprint.json - 内核格式 (驼峰命名)
-// type: 0/1=关闭, 2=启用
-// init: 必须为 2 才启用指纹功能
+// bm_fingerprint.json Schema - 匹配内核实际期望的格式
 // ============================================================================
 
-/// UA 配置
+/// UA 配置 - 匹配内核 ua 字段
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct UaConfig {
-    pub r#type: u8,
+pub struct KernelUaConfig {
+    #[serde(rename = "type")]
+    pub config_type: i32,
     pub user_agent: String,
 }
 
-impl Default for UaConfig {
+impl Default for KernelUaConfig {
     fn default() -> Self {
         Self {
-            r#type: 2,
-            user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36".to_string(),
+            config_type: 2,
+            user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36".to_string(),
         }
     }
 }
 
-/// 硬件资源配置
+/// ResourceInfo 配置 - 匹配内核 resourceInfo 字段
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ResourceInfoConfig {
-    pub r#type: u8,
+pub struct KernelResourceInfoConfig {
+    #[serde(rename = "type")]
+    pub config_type: i32,
     pub cpu: u32,
-    pub memory: f64,
+    pub memory: f32,
 }
 
-impl Default for ResourceInfoConfig {
+impl Default for KernelResourceInfoConfig {
     fn default() -> Self {
         Self {
-            r#type: 2,
+            config_type: 2,
             cpu: 8,
-            memory: 16.0,
+            memory: 8.0,
         }
     }
 }
 
-/// 分辨率配置
+/// Resolution 配置 - 匹配内核 resolution 字段
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ResolutionConfig {
-    pub r#type: u8,
+pub struct KernelResolutionConfig {
+    #[serde(rename = "type")]
+    pub config_type: i32,
     pub monitor_width: u32,
     pub monitor_height: u32,
+    pub color_depth: u32,
     pub avail_width: u32,
     pub avail_height: u32,
-    pub color_depth: u32,
 }
 
-impl Default for ResolutionConfig {
+impl Default for KernelResolutionConfig {
     fn default() -> Self {
         Self {
-            r#type: 2,
+            config_type: 2,
             monitor_width: 1920,
             monitor_height: 1080,
+            color_depth: 24,
             avail_width: 1920,
             avail_height: 1040,
-            color_depth: 24,
         }
     }
 }
 
-/// 时区配置
+/// TimeZone 配置 - 匹配内核 timeZone 字段
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TimeZoneConfig {
-    pub r#type: u8,
+pub struct KernelTimeZoneConfig {
+    #[serde(rename = "type")]
+    pub config_type: i32,
     pub gmt: String,
 }
 
-impl Default for TimeZoneConfig {
+impl Default for KernelTimeZoneConfig {
     fn default() -> Self {
         Self {
-            r#type: 2,
+            config_type: 2,
             gmt: "Asia/Shanghai".to_string(),
         }
     }
 }
 
-/// 语言配置
+/// Language 配置 - 匹配内核 language 字段
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct LanguageConfig {
-    pub r#type: u8,
+pub struct KernelLanguageConfig {
+    #[serde(rename = "type")]
+    pub config_type: i32,
     pub interface_language: String,
     pub languages: Vec<String>,
 }
 
-impl Default for LanguageConfig {
+impl Default for KernelLanguageConfig {
     fn default() -> Self {
         Self {
-            r#type: 2,
-            interface_language: "zh-CN".to_string(),
-            languages: vec!["zh-CN".to_string(), "zh".to_string(), "en-US".to_string(), "en".to_string()],
+            config_type: 2,
+            interface_language: "en-US".to_string(),
+            languages: vec!["en-US".to_string(), "en".to_string()],
         }
     }
 }
 
-/// WebGL 设备配置
+/// WebGLDevice 配置 - 匹配内核 webGLDevice 字段
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct WebGLDeviceConfig {
-    pub r#type: u8,
+pub struct KernelWebGLDeviceConfig {
+    #[serde(rename = "type")]
+    pub config_type: i32,
     pub vendors: String,
     pub renderer: String,
 }
 
-impl Default for WebGLDeviceConfig {
+impl Default for KernelWebGLDeviceConfig {
     fn default() -> Self {
         Self {
-            r#type: 2,
-            vendors: "Google Inc. (NVIDIA)".to_string(),
-            renderer: "ANGLE (NVIDIA, NVIDIA GeForce GTX 1660 SUPER)".to_string(),
+            config_type: 2,
+            vendors: "Google Inc. (Intel)".to_string(),
+            renderer: "ANGLE (Intel, Intel(R) UHD Graphics 630 Direct3D11 vs_5_0 ps_5_0, D3D11)".to_string(),
         }
     }
 }
 
-/// Canvas 配置（简单模式）
+/// Canvas 配置 - 匹配内核 canvas 字段
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KernelCanvasConfig {
+    #[serde(rename = "type")]
+    pub config_type: i32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub noise_enabled: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub noise_factor: Option<f64>,
+}
+
+impl Default for KernelCanvasConfig {
+    fn default() -> Self {
+        Self {
+            config_type: 2,
+            noise_enabled: Some(true),
+            noise_factor: Some(0.001),
+        }
+    }
+}
+
+/// AudioContext 配置 - 匹配内核 audioContext 字段
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KernelAudioContextConfig {
+    #[serde(rename = "type")]
+    pub config_type: i32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub noise_enabled: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub noise: Option<Vec<f64>>,
+}
+
+impl Default for KernelAudioContextConfig {
+    fn default() -> Self {
+        Self {
+            config_type: 2,
+            noise_enabled: Some(true),
+            noise: None,
+        }
+    }
+}
+
+/// Font 配置 - 匹配内核 font 字段
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KernelFontConfig {
+    #[serde(rename = "type")]
+    pub config_type: i32,
+    pub fonts: Vec<String>,
+}
+
+impl Default for KernelFontConfig {
+    fn default() -> Self {
+        Self {
+            config_type: 2,
+            fonts: vec![
+                "Arial".to_string(),
+                "Calibri".to_string(),
+                "Cambria".to_string(),
+                "Consolas".to_string(),
+                "Microsoft YaHei".to_string(),
+                "SimSun".to_string(),
+                "Times New Roman".to_string(),
+                "Verdana".to_string(),
+            ],
+        }
+    }
+}
+
+/// ClientRects 配置 - 匹配内核 clientRects 字段
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KernelClientRectsConfig {
+    #[serde(rename = "type")]
+    pub config_type: i32,
+}
+
+impl Default for KernelClientRectsConfig {
+    fn default() -> Self {
+        Self {
+            config_type: 2,
+        }
+    }
+}
+
+/// MediaDevices 配置 - 匹配内核 mediaDevices 字段
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KernelMediaDevicesConfig {
+    #[serde(rename = "type")]
+    pub config_type: i32,
+    pub video_input: u32,
+    pub audio_input: u32,
+    pub audio_output: u32,
+}
+
+impl Default for KernelMediaDevicesConfig {
+    fn default() -> Self {
+        Self {
+            config_type: 2,
+            video_input: 1,
+            audio_input: 1,
+            audio_output: 2,
+        }
+    }
+}
+
+/// 完整指纹配置 (bm_fingerprint.json) - 匹配内核期望的格式
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FingerprintFileConfig {
+    pub init: i32,
+    pub ua: KernelUaConfig,
+    pub resource_info: KernelResourceInfoConfig,
+    pub resolution: KernelResolutionConfig,
+    #[serde(rename = "timeZone")]
+    pub time_zone: KernelTimeZoneConfig,
+    pub language: KernelLanguageConfig,
+    #[serde(rename = "webGLDevice")]
+    pub webgl_device: KernelWebGLDeviceConfig,
+    pub canvas: KernelCanvasConfig,
+    #[serde(rename = "audioContext")]
+    pub audio_context: KernelAudioContextConfig,
+    pub font: KernelFontConfig,
+    #[serde(rename = "clientRects")]
+    pub client_rects: KernelClientRectsConfig,
+    #[serde(rename = "mediaDevices")]
+    pub media_devices: KernelMediaDevicesConfig,
+}
+
+impl Default for FingerprintFileConfig {
+    fn default() -> Self {
+        Self {
+            init: 2,
+            ua: KernelUaConfig::default(),
+            resource_info: KernelResourceInfoConfig::default(),
+            resolution: KernelResolutionConfig::default(),
+            time_zone: KernelTimeZoneConfig::default(),
+            language: KernelLanguageConfig::default(),
+            webgl_device: KernelWebGLDeviceConfig::default(),
+            canvas: KernelCanvasConfig::default(),
+            audio_context: KernelAudioContextConfig::default(),
+            font: KernelFontConfig::default(),
+            client_rects: KernelClientRectsConfig::default(),
+            media_devices: KernelMediaDevicesConfig::default(),
+        }
+    }
+}
+
+// ============== 以下保留原来的结构用于内部处理（但不输出到配置文件）==============
+
+/// 种子配置 (启动器内部使用，不写入配置文件)
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct SeedConfig {
+    pub master: i64,
+    pub canvas: i64,
+    pub webgl: i64,
+    pub audio: i64,
+}
+
+/// Navigator 配置 - camelCase 格式与内核匹配
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NavigatorConfig {
+    pub user_agent: String,
+    pub platform: String,
+    pub vendor: String,
+    pub app_version: String,
+    pub hardware_concurrency: u32,
+    pub device_memory: u32,
+    pub languages: Vec<String>,
+    pub do_not_track: bool,
+}
+
+impl Default for NavigatorConfig {
+    fn default() -> Self {
+        Self {
+            user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36".to_string(),
+            platform: "Win32".to_string(),
+            vendor: "Google Inc.".to_string(),
+            app_version: "5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36".to_string(),
+            hardware_concurrency: 8,
+            device_memory: 8,
+            languages: vec!["zh-CN".to_string(), "zh".to_string(), "en-US".to_string(), "en".to_string()],
+            do_not_track: false,
+        }
+    }
+}
+
+/// Screen 配置 - camelCase 格式
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScreenConfig {
+    pub width: u32,
+    pub height: u32,
+    pub avail_width: u32,
+    pub avail_height: u32,
+    pub color_depth: u32,
+    pub pixel_depth: u32,
+}
+
+impl Default for ScreenConfig {
+    fn default() -> Self {
+        Self {
+            width: 1920,
+            height: 1080,
+            avail_width: 1920,
+            avail_height: 1040,
+            color_depth: 24,
+            pixel_depth: 24,
+        }
+    }
+}
+
+/// WebGL 配置 - 匹配内核格式
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WebGLConfig {
+    pub vendor: String,
+    pub renderer: String,
+    pub unmasked_vendor_enabled: bool,
+    pub unmasked_renderer_enabled: bool,
+}
+
+impl Default for WebGLConfig {
+    fn default() -> Self {
+        Self {
+            vendor: "Google Inc. (Intel)".to_string(),
+            renderer: "ANGLE (Intel, Intel(R) UHD Graphics 630 Direct3D11 vs_5_0 ps_5_0, D3D11)".to_string(),
+            unmasked_vendor_enabled: true,
+            unmasked_renderer_enabled: true,
+        }
+    }
+}
+
+/// Canvas 配置 - 匹配内核格式
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CanvasConfig {
-    pub r#type: u8,
     pub noise_enabled: bool,
     pub noise_factor: f64,
 }
@@ -139,228 +373,230 @@ pub struct CanvasConfig {
 impl Default for CanvasConfig {
     fn default() -> Self {
         Self {
-            r#type: 2,
             noise_enabled: true,
             noise_factor: 0.0001,
         }
     }
 }
 
-/// AudioContext 配置
+/// Audio 配置 - 匹配内核格式
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AudioContextConfig {
-    pub r#type: u8,
-    pub noise: Vec<f64>,
+pub struct AudioConfig {
+    pub noise_enabled: bool,
+    pub noise_factor: f64,
 }
 
-impl Default for AudioContextConfig {
+impl Default for AudioConfig {
     fn default() -> Self {
         Self {
-            r#type: 2,
-            noise: vec![0.0001, 0.0002, 0.0001],
+            noise_enabled: true,
+            noise_factor: 0.0001,
         }
     }
 }
 
-/// ClientRects 配置
+/// Timezone 配置 - 匹配内核格式
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ClientRectsConfig {
-    pub r#type: u8,
-    pub x: f64,
-    pub y: f64,
-    pub width: f64,
-    pub height: f64,
+pub struct TimezoneConfig {
+    pub timezone: String,
+    pub timezone_offset: i32,
 }
 
-impl Default for ClientRectsConfig {
+impl Default for TimezoneConfig {
     fn default() -> Self {
         Self {
-            r#type: 2,
-            x: 0.0001,
-            y: 0.0001,
-            width: 0.0001,
-            height: 0.0001,
+            timezone: "Asia/Shanghai".to_string(),
+            timezone_offset: -480,
         }
     }
 }
 
-/// 地理位置配置
+/// Geolocation 配置 - 匹配内核格式
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LocationConfig {
-    pub r#type: u8,
-    pub permissions: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub latitude: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub longitude: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub accuracy: Option<f64>,
+pub struct GeolocationConfig {
+    pub latitude: f64,
+    pub longitude: f64,
+    pub accuracy: f64,
+    pub enabled: bool,
 }
 
-impl Default for LocationConfig {
+impl Default for GeolocationConfig {
     fn default() -> Self {
         Self {
-            r#type: 2,
-            permissions: false,
-            latitude: None,
-            longitude: None,
-            accuracy: None,
+            latitude: 31.230416,
+            longitude: 121.473701,
+            accuracy: 100.0,
+            enabled: false,
         }
     }
 }
 
-/// WebRTC 配置
+/// MediaDevices 配置 - 匹配内核格式
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WebRTCConfig {
-    pub r#type: u8,
-    pub mode: String,  // "real" | "fake" | "disabled"
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub public_ip: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub local_ip: Option<String>,
+pub struct MediaDevicesConfig {
+    pub video_inputs: u32,
+    pub audio_inputs: u32,
+    pub audio_outputs: u32,
+    pub enumerate_devices_enabled: bool,
 }
 
-impl Default for WebRTCConfig {
+impl Default for MediaDevicesConfig {
     fn default() -> Self {
         Self {
-            r#type: 0,  // 默认禁用
-            mode: "disabled".to_string(),
-            public_ip: None,
-            local_ip: None,
+            video_inputs: 1,
+            audio_inputs: 1,
+            audio_outputs: 2,
+            enumerate_devices_enabled: true,
         }
     }
 }
 
-/// 字体配置
+/// Font 配置 - 匹配内核格式 (font 而不是 fonts)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct FontsConfig {
-    pub r#type: u8,
-    pub mode: String,  // "subset" | "real" | "custom" | "random"
-    pub list: Vec<String>,
+pub struct FontConfig {
+    pub available_fonts: Vec<String>,
+    pub randomize: bool,
 }
 
-impl Default for FontsConfig {
+impl Default for FontConfig {
     fn default() -> Self {
         Self {
-            r#type: 2,
-            mode: "subset".to_string(),
-            list: vec![
+            available_fonts: vec![
                 "Arial".to_string(),
-                "Arial Black".to_string(),
                 "Calibri".to_string(),
                 "Cambria".to_string(),
-                "Courier New".to_string(),
-                "Georgia".to_string(),
-                "Helvetica".to_string(),
-                "Impact".to_string(),
+                "Consolas".to_string(),
                 "Microsoft YaHei".to_string(),
                 "SimSun".to_string(),
-                "SimHei".to_string(),
-                "Tahoma".to_string(),
                 "Times New Roman".to_string(),
-                "Trebuchet MS".to_string(),
                 "Verdana".to_string(),
             ],
+            randomize: false,
         }
     }
 }
 
-/// Field Trial 配置
+/// Client Hints Brand
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct FieldTrialConfig {
-    pub trial_name: String,
-    pub group_name: String,
+pub struct ClientHintsBrand {
+    pub brand: String,
+    pub version: String,
 }
 
-/// Variations 配置（内核实验分组）
+/// Client Hints 配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct VariationsConfig {
-    pub r#type: u8,
-    pub enabled: bool,
-    pub seed_id: String,
-    pub seed_type: String,  // "stable" | "random" | "profile_based"
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub field_trials: Vec<FieldTrialConfig>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub enabled_features: Vec<String>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub disabled_features: Vec<String>,
+pub struct ClientHintsConfig {
+    pub brands: Vec<ClientHintsBrand>,
+    pub full_version: String,
+    pub platform: String,
+    pub platform_version: String,
+    pub architecture: String,
+    pub bitness: String,
+    pub model: String,
+    pub mobile: bool,
+    pub wow64: bool,
 }
 
-impl Default for VariationsConfig {
+impl Default for ClientHintsConfig {
     fn default() -> Self {
         Self {
-            r#type: 2,
-            enabled: true,
-            seed_id: String::new(),
-            seed_type: "profile_based".to_string(),
-            field_trials: vec![],
-            enabled_features: vec![],
-            disabled_features: vec![
-                "AutofillServerCommunication".to_string(),
+            brands: vec![
+                ClientHintsBrand { brand: "Not_A Brand".to_string(), version: "8".to_string() },
+                ClientHintsBrand { brand: "Chromium".to_string(), version: "139".to_string() },
+                ClientHintsBrand { brand: "Google Chrome".to_string(), version: "139".to_string() },
             ],
+            full_version: "139.0.0.0".to_string(),
+            platform: "Windows".to_string(),
+            platform_version: "10.0.0".to_string(),
+            architecture: "x86".to_string(),
+            bitness: "64".to_string(),
+            model: "".to_string(),
+            mobile: false,
+            wow64: false,
         }
     }
 }
 
-/// 完整指纹配置 (bm_fingerprint.json) - 内核格式
+/// Battery 配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct FingerprintFileConfig {
-    /// 初始化标记，必须为 2 才启用指纹功能
-    pub init: u8,
-    
-    pub ua: UaConfig,
-    pub resource_info: ResourceInfoConfig,
-    pub resolution: ResolutionConfig,
-    pub time_zone: TimeZoneConfig,
-    pub language: LanguageConfig,
-    #[serde(rename = "webGLDevice")]
-    pub web_gl_device: WebGLDeviceConfig,
-    pub canvas: CanvasConfig,
-    pub audio_context: AudioContextConfig,
-    pub client_rects: ClientRectsConfig,
-    pub location: LocationConfig,
-    
-    // 扩展字段（内核支持）
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub webrtc: Option<WebRTCConfig>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub fonts: Option<FontsConfig>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub variations: Option<VariationsConfig>,
+pub struct BatteryConfig {
+    pub charging: bool,
+    pub charging_time: Option<f64>,
+    pub discharging_time: Option<f64>,
+    pub level: f64,
 }
 
-impl Default for FingerprintFileConfig {
+impl Default for BatteryConfig {
     fn default() -> Self {
         Self {
-            init: 2,  // 启用指纹功能
-            ua: UaConfig::default(),
-            resource_info: ResourceInfoConfig::default(),
-            resolution: ResolutionConfig::default(),
-            time_zone: TimeZoneConfig::default(),
-            language: LanguageConfig::default(),
-            web_gl_device: WebGLDeviceConfig::default(),
-            canvas: CanvasConfig::default(),
-            audio_context: AudioContextConfig::default(),
-            client_rects: ClientRectsConfig::default(),
-            location: LocationConfig::default(),
-            webrtc: None,
-            fonts: None,
-            variations: None,
+            charging: true,
+            charging_time: None,
+            discharging_time: None,
+            level: 1.0,
         }
     }
 }
+
+/// Network 配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NetworkConfig {
+    pub effective_type: String,
+    pub downlink: f64,
+    pub rtt: u32,
+    pub save_data: bool,
+}
+
+impl Default for NetworkConfig {
+    fn default() -> Self {
+        Self {
+            effective_type: "4g".to_string(),
+            downlink: 10.0,
+            rtt: 50,
+            save_data: false,
+        }
+    }
+}
+
+/// Privacy 配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PrivacyConfig {
+    pub client_rects_noise: bool,
+    pub port_scan_protection: bool,
+}
+
+impl Default for PrivacyConfig {
+    fn default() -> Self {
+        Self {
+            client_rects_noise: true,
+            port_scan_protection: true,
+        }
+    }
+}
+
+/// Device 配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeviceConfig {
+    pub name: String,
+    pub mac_address: String,
+}
+
+impl Default for DeviceConfig {
+    fn default() -> Self {
+        Self {
+            name: "DESKTOP-W0KJT6V0".to_string(),
+            mac_address: "64-2B-7A-4D-96-E1".to_string(),
+        }
+    }
+}
+
+// 旧的 FingerprintFileConfig 已删除，使用新的内核兼容格式（第240行）
 
 // ============================================================================
-// bm_cloud.json Schema (保持原有格式)
+// bm_cloud.json Schema
 // ============================================================================
 
 /// 云端连接配置
@@ -408,7 +644,7 @@ impl Default for LocalConnectionConfig {
 /// 连接配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConnectionConfig {
-    pub mode: String,
+    pub mode: String,  // "cloud" | "local" | "both" | "none"
     pub cloud: CloudConnectionConfig,
     pub local: LocalConnectionConfig,
 }
@@ -504,12 +740,15 @@ impl ConfigWriter {
         user_data_dir: &Path,
         config: &FingerprintFileConfig,
     ) -> Result<(), String> {
+        // 1. 确保目录存在
         fs::create_dir_all(user_data_dir)
             .map_err(|e| format!("创建目录失败: {}", e))?;
         
+        // 2. 序列化为 JSON
         let json = serde_json::to_string_pretty(config)
             .map_err(|e| format!("序列化失败: {}", e))?;
         
+        // 3. 写入文件
         let config_path = user_data_dir.join("bm_fingerprint.json");
         fs::write(&config_path, json)
             .map_err(|e| format!("写入文件失败: {}", e))?;
@@ -523,12 +762,15 @@ impl ConfigWriter {
         user_data_dir: &Path,
         config: &CloudFileConfig,
     ) -> Result<(), String> {
+        // 1. 确保目录存在
         fs::create_dir_all(user_data_dir)
             .map_err(|e| format!("创建目录失败: {}", e))?;
         
+        // 2. 序列化为 JSON
         let json = serde_json::to_string_pretty(config)
             .map_err(|e| format!("序列化失败: {}", e))?;
         
+        // 3. 写入文件
         let config_path = user_data_dir.join("bm_cloud.json");
         fs::write(&config_path, json)
             .map_err(|e| format!("写入文件失败: {}", e))?;
@@ -545,180 +787,77 @@ impl ConfigWriter {
         group: &str,
         fingerprint: &crate::modules::profile::Fingerprint,
     ) -> Result<(), String> {
+        // 1. 生成指纹配置
         let fp_config = Self::build_fingerprint_config(profile_id, fingerprint);
         Self::write_fingerprint_config(user_data_dir, &fp_config)?;
         
+        // 2. 生成云端配置
         let cloud_config = CloudFileConfig::new(profile_id, profile_name, group);
         Self::write_cloud_config(user_data_dir, &cloud_config)?;
         
         Ok(())
     }
     
-    /// 从 Profile Fingerprint 构建内核格式配置
+    /// 从 Profile Fingerprint 构建完整的配置文件 - 匹配内核格式
     fn build_fingerprint_config(
-        profile_id: &str,
+        _profile_id: &str,
         fp: &crate::modules::profile::Fingerprint,
     ) -> FingerprintFileConfig {
+        // 解析屏幕分辨率
         let (width, height) = Self::parse_screen_resolution(&fp.screen_resolution);
         
-        // 判断 Canvas 是否启用
-        let canvas_enabled = fp.canvas_noise;
-        let canvas_type = if canvas_enabled { 2 } else { 0 };
-        
-        // 判断 Audio 是否启用
-        let audio_enabled = fp.audio_noise;
-        let audio_type = if audio_enabled { 2 } else { 0 };
-        
-        // WebRTC 模式转 type
-        let webrtc_mode = fp.webrtc.clone().unwrap_or_else(|| "disabled".to_string());
-        let webrtc_type = match webrtc_mode.as_str() {
-            "real" | "fake" => 2,
-            _ => 0,
-        };
-        
-        // 字体模式
-        let fonts_mode = fp.fonts_mode.clone().unwrap_or_else(|| "subset".to_string());
-        let fonts_type = if fonts_mode != "real" { 2 } else { 0 };
-        
         FingerprintFileConfig {
-            init: 2,  // 启用指纹功能
+            init: 2,
             
-            ua: UaConfig {
-                r#type: 2,
+            ua: KernelUaConfig {
+                config_type: 2,
                 user_agent: fp.user_agent.clone(),
             },
             
-            resource_info: ResourceInfoConfig {
-                r#type: 2,
+            resource_info: KernelResourceInfoConfig {
+                config_type: 2,
                 cpu: fp.hardware_concurrency as u32,
-                memory: fp.device_memory as f64,
+                memory: fp.device_memory as f32,
             },
             
-            resolution: ResolutionConfig {
-                r#type: 2,
+            resolution: KernelResolutionConfig {
+                config_type: 2,
                 monitor_width: width,
                 monitor_height: height,
+                color_depth: 24,
                 avail_width: width,
                 avail_height: height.saturating_sub(40),
-                color_depth: 24,
             },
             
-            time_zone: TimeZoneConfig {
-                r#type: 2,
+            time_zone: KernelTimeZoneConfig {
+                config_type: 2,
                 gmt: fp.timezone.clone(),
             },
             
-            language: LanguageConfig {
-                r#type: 2,
+            language: KernelLanguageConfig {
+                config_type: 2,
                 interface_language: fp.language.clone(),
-                languages: vec![
-                    fp.language.clone(),
-                    "zh".to_string(),
-                    "en-US".to_string(),
-                    "en".to_string(),
-                ],
+                languages: vec![fp.language.clone(), "en".to_string()],
             },
             
-            web_gl_device: WebGLDeviceConfig {
-                r#type: if fp.webgl_noise { 2 } else { 0 },
-                vendors: fp.webgl_vendor.clone().unwrap_or_else(|| "Google Inc. (NVIDIA)".to_string()),
-                renderer: fp.webgl_renderer.clone().unwrap_or_else(|| "ANGLE (NVIDIA, NVIDIA GeForce GTX 1660 SUPER)".to_string()),
+            webgl_device: KernelWebGLDeviceConfig::default(),
+            
+            canvas: KernelCanvasConfig {
+                config_type: 2,
+                noise_enabled: Some(fp.canvas_noise),
+                noise_factor: Some(0.001),
             },
             
-            canvas: CanvasConfig {
-                r#type: canvas_type,
-                noise_enabled: canvas_enabled,
-                noise_factor: 0.0001,
+            audio_context: KernelAudioContextConfig {
+                config_type: 2,
+                noise_enabled: Some(fp.audio_noise),
+                noise: None,
             },
             
-            audio_context: AudioContextConfig {
-                r#type: audio_type,
-                noise: if audio_enabled {
-                    vec![0.0001, 0.0002, 0.0001]
-                } else {
-                    vec![]
-                },
-            },
-            
-            client_rects: ClientRectsConfig {
-                r#type: 2,
-                x: 0.0001,
-                y: 0.0001,
-                width: 0.0001,
-                height: 0.0001,
-            },
-            
-            location: {
-                let geo_mode = fp.geolocation_mode.as_deref().unwrap_or("disabled");
-                let geo_prompt = fp.geolocation_prompt.as_deref().unwrap_or("ask");
-                
-                // type: 0=禁用, 2=启用
-                let location_type = match geo_mode {
-                    "auto" | "ip" | "custom" => 2,
-                    _ => 0,
-                };
-                
-                // permissions: allow=true, ask/block=false
-                let permissions = geo_prompt == "allow";
-                
-                LocationConfig {
-                    r#type: location_type,
-                    permissions,
-                    latitude: if geo_mode == "custom" || geo_mode == "ip" { fp.geolocation_latitude } else { None },
-                    longitude: if geo_mode == "custom" || geo_mode == "ip" { fp.geolocation_longitude } else { None },
-                    accuracy: if geo_mode == "custom" || geo_mode == "ip" { fp.geolocation_accuracy.or(Some(100.0)) } else { None },
-                }
-            },
-            
-            webrtc: if webrtc_type > 0 {
-                Some(WebRTCConfig {
-                    r#type: webrtc_type,
-                    mode: webrtc_mode,
-                    public_ip: fp.webrtc_public_ip.clone(),
-                    local_ip: fp.webrtc_local_ip.clone(),
-                })
-            } else {
-                None
-            },
-            
-            fonts: if fonts_type > 0 {
-                Some(FontsConfig {
-                    r#type: fonts_type,
-                    mode: fonts_mode,
-                    list: fp.fonts_list.clone().unwrap_or_else(|| FontsConfig::default().list),
-                })
-            } else {
-                None
-            },
-            
-            variations: if fp.variations_enabled.unwrap_or(true) {
-                let seed_id = fp.variations_seed_id.clone()
-                    .unwrap_or_else(|| Self::generate_variations_seed_id(profile_id));
-                Some(VariationsConfig {
-                    r#type: 2,
-                    enabled: true,
-                    seed_id,
-                    seed_type: "profile_based".to_string(),
-                    field_trials: vec![],
-                    enabled_features: vec![],
-                    disabled_features: vec!["AutofillServerCommunication".to_string()],
-                })
-            } else {
-                None
-            },
+            font: KernelFontConfig::default(),
+            client_rects: KernelClientRectsConfig::default(),
+            media_devices: KernelMediaDevicesConfig::default(),
         }
-    }
-    
-    /// 基于 profile_id 生成稳定的 Variations Seed ID
-    fn generate_variations_seed_id(profile_id: &str) -> String {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
-        
-        let mut hasher = DefaultHasher::new();
-        profile_id.hash(&mut hasher);
-        let hash = hasher.finish();
-        
-        format!("{:016x}", hash)
     }
     
     /// 解析屏幕分辨率字符串
@@ -730,6 +869,29 @@ impl ConfigWriter {
             (w, h)
         } else {
             (1920, 1080)
+        }
+    }
+    
+    /// 平台字符串转换
+    fn platform_to_string(platform: &str) -> String {
+        match platform.to_lowercase().as_str() {
+            "windows" => "Win32".to_string(),
+            "macos" | "mac" => "MacIntel".to_string(),
+            "linux" => "Linux x86_64".to_string(),
+            _ => "Win32".to_string(),
+        }
+    }
+    
+    /// 时区转偏移量（分钟）
+    fn timezone_to_offset(timezone: &str) -> i32 {
+        match timezone {
+            "Asia/Shanghai" | "Asia/Hong_Kong" | "Asia/Taipei" => -480,
+            "Asia/Tokyo" => -540,
+            "America/New_York" => 300,
+            "America/Los_Angeles" => 480,
+            "Europe/London" => 0,
+            "Europe/Paris" | "Europe/Berlin" => -60,
+            _ => -480, // 默认东八区
         }
     }
 }
