@@ -660,6 +660,7 @@ const {
 .list-body {
   flex: 1;
   overflow-y: auto;
+  background: var(--color-bg-secondary);
 }
 
 .list-row-grid {
@@ -785,11 +786,42 @@ const {
   align-items: center;
   justify-content: space-between;
   padding: 12px 24px;
-  background: var(--color-bg-page);
+  background-color: #ffffff;
   border-top: 1px solid var(--color-border-default);
+  flex-shrink: 0; // 防止被压缩
+  min-height: 48px;
+  flex-wrap: wrap;
+  gap: 8px 16px;
 
-  .page-info { font-size: 12px; color: var(--color-text-tertiary); strong { color: var(--color-text-primary); } }
-  .page-controls { display: flex; align-items: center; gap: 16px; .size-select { width: 100px; } }
+  .page-info { 
+    font-size: 12px; 
+    color: var(--color-text-tertiary); 
+    white-space: nowrap;
+    strong { color: var(--color-text-primary); } 
+  }
+  
+  .page-controls { 
+    display: flex; 
+    align-items: center; 
+    gap: 12px; 
+    flex-shrink: 0;
+    .size-select { width: 90px; } 
+  }
+  
+  // 小屏幕适配
+  @media (max-width: 768px) {
+    padding: 10px 16px;
+    justify-content: center;
+    
+    .page-info { 
+      display: none; // 小屏幕隐藏详情文字
+    }
+    
+    .page-controls {
+      gap: 8px;
+      .size-select { width: 80px; }
+    }
+  }
 }
 
 .empty-view {

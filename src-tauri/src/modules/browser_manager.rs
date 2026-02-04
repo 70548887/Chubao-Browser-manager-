@@ -49,6 +49,23 @@ pub struct BrowserErrorEvent {
     pub timestamp: i64,
 }
 
+/// 启动进度事件
+#[derive(Debug, Clone, Serialize)]
+pub struct LaunchProgressEvent {
+    #[serde(rename = "profileId")]
+    pub profile_id: String,
+    /// 当前步骤: check_config, sync_extensions, setup_proxy, sync_fingerprint, sync_cache, launching, done
+    pub step: String,
+    /// 步骤标签
+    pub label: String,
+    /// 进度百分比 0-100
+    pub progress: u8,
+    /// 是否完成
+    pub done: bool,
+    /// 错误信息（如果有）
+    pub error: Option<String>,
+}
+
 /// 事件发射器
 pub struct EventEmitter {
     app_handle: tauri::AppHandle,
@@ -82,6 +99,30 @@ impl EventEmitter {
         
         if let Err(e) = self.app_handle.emit("browser:error", event) {
             error!(error = %e, "Failed to emit browser_error event");
+        }
+    }
+    
+    /// 发送启动进度事件
+    pub fn emit_launch_progress(
+        &self, 
+        profile_id: String, 
+        step: &str, 
+        label: &str,
+        progress: u8,
+        done: bool,
+        error: Option<String>,
+    ) {
+        let event = LaunchProgressEvent {
+            profile_id,
+            step: step.to_string(),
+            label: label.to_string(),
+            progress,
+            done,
+            error,
+        };
+        
+        if let Err(e) = self.app_handle.emit("browser:launch_progress", event) {
+            error!(error = %e, "Failed to emit launch_progress event");
         }
     }
 }
@@ -213,6 +254,19 @@ impl BrowserManager {
     /// 发送错误事件
     pub fn emit_error(&self, profile_id: String, error: String) {
         self.event_emitter.emit_browser_error(profile_id, error);
+    }
+    
+    /// 发送启动进度事件
+    pub fn emit_progress(
+        &self, 
+        profile_id: String, 
+        step: &str, 
+        label: &str, 
+        progress: u8, 
+        done: bool,
+        error: Option<String>,
+    ) {
+        self.event_emitter.emit_launch_progress(profile_id, step, label, progress, done, error);
     }
 }
 

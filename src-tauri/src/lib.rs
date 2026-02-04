@@ -124,23 +124,53 @@ fn profile_user_data_dir(base_dir: &PathBuf, profile_id: &str) -> PathBuf {
 }
 
 async fn do_launch_browser(profile_id: String, state: &AppState) -> Result<(), String> {
+    // 辅助宏：发送进度事件
+    macro_rules! emit_progress {
+        ($step:expr, $label:expr, $progress:expr) => {
+            state.browser_manager.emit_progress(
+                profile_id.clone(), $step, $label, $progress, false, None
+            );
+        };
+    }
+    
+    macro_rules! emit_error {
+        ($step:expr, $label:expr, $progress:expr, $error:expr) => {
+            state.browser_manager.emit_progress(
+                profile_id.clone(), $step, $label, $progress, false, Some($error.to_string())
+            );
+        };
+    }
+
     // 检查是否已在运行
     if state.browser_manager.is_running(&profile_id).await {
+        // 已在运行，直接发送完成事件
+        state.browser_manager.emit_progress(
+            profile_id.clone(), "done", "窗口已打开", 100, true, None
+        );
         return Ok(()); // 幂等性：已在运行则直接返回成功
     }
+
+    // 步骤1: 检查配置 (0-10%)
+    emit_progress!("check_config", "检查并同步配置中...", 0);
 
     // 获取启动许可（限流）
     let semaphore = state.browser_manager.get_launch_permit();
     let _permit = semaphore
         .acquire()
         .await
-        .map_err(|e| format!("获取启动许可失败: {}", e))?;
+        .map_err(|e| {
+            let err = format!("获取启动许可失败: {}", e);
+            emit_error!("check_config", "检查并同步配置中...", 5, &err);
+            err
+        })?;
 
     let kernel_path = get_setting(&state.pool, "kernel_path")
         .await?
         .unwrap_or_default();
     if kernel_path.trim().is_empty() {
-        return Err("浏览器内核路径未设置，请先在设置中配置".to_string());
+        let err = "浏览器内核路径未设置，请先在设置中配置".to_string();
+        emit_error!("check_config", "检查并同步配置中...", 5, &err);
+        return Err(err);
     }
 
     let user_data_dir_setting = get_setting(&state.pool, "user_data_dir")
@@ -154,35 +184,43 @@ async fn do_launch_browser(profile_id: String, state: &AppState) -> Result<(), S
 
     let profile_dir = profile_user_data_dir(&base_user_data_dir, &profile_id);
     std::fs::create_dir_all(&profile_dir)
-        .map_err(|e| format!("创建用户数据目录失败: {}", e))?;
+        .map_err(|e| {
+            let err = format!("创建用户数据目录失败: {}", e);
+            emit_error!("check_config", "检查并同步配置中...", 5, &err);
+            err
+        })?;
 
-    let profile = {
-        let service = state.profile_service.lock().await;
-        service.get_profile(&profile_id)
-            .await
-            .map_err(|e| e.to_string())?
-    };
+    emit_progress!("check_config", "检查并同步配置中...", 10);
 
-    // ✅ P0: 写入配置文件（bm_fingerprint.json / bm_cloud.json）
-    ConfigWriter::setup_profile_configs(
-        &profile_dir,
-        &profile.id,
-        &profile.name,
-        &profile.group,
-        &profile.fingerprint,
-    ).map_err(|e| {
-        let error_msg = format!("写入配置文件失败: {}", e);
-        state.browser_manager.emit_error(profile_id.clone(), error_msg.clone());
-        error_msg
-    })?;
-
-    // ✅ 获取 Profile 启用的扩展，生成 --load-extension 参数
+    // 步骤2: 同步扩展 (10-25%)
+    emit_progress!("sync_extensions", "检查并同步扩展中...", 15);
+    
     let extensions_dir = state.app_data_dir.join("Extensions");
     let load_extension_arg = {
         let extension_service = state.extension_service.lock().await;
         extension_service.build_load_extension_arg(&extensions_dir, &profile_id)
             .await
-            .map_err(|e| format!("获取扩展列表失败: {}", e))?
+            .map_err(|e| {
+                let err = format!("获取扩展列表失败: {}", e);
+                emit_error!("sync_extensions", "检查并同步扩展中...", 20, &err);
+                err
+            })?
+    };
+    
+    emit_progress!("sync_extensions", "检查并同步扩展中...", 25);
+
+    // 步骤3: 获取IP/代理配置 (25-45%)
+    emit_progress!("setup_proxy", "开始获取IP...", 30);
+
+    let profile = {
+        let service = state.profile_service.lock().await;
+        service.get_profile(&profile_id)
+            .await
+            .map_err(|e| {
+                let err = e.to_string();
+                emit_error!("setup_proxy", "开始获取IP...", 35, &err);
+                err
+            })?
     };
 
     // ✅ P3: 代理桥接 - 解决带密码 SOCKS5 代理问题
@@ -202,7 +240,7 @@ async fn do_launch_browser(profile_id: String, state: &AppState) -> Result<(), S
                 upstream_type: proxy_type.to_string(),
                 username: proxy_config.username.clone(),
                 password: proxy_config.password.clone(),
-                enable_udp: true, // 启用 UDP 支持（用于 WebRTC）
+                enable_udp: true,
             };
             
             let local_addr = state.proxy_bridge_manager
@@ -210,6 +248,7 @@ async fn do_launch_browser(profile_id: String, state: &AppState) -> Result<(), S
                 .await
                 .map_err(|e| {
                     let error_msg = format!("启动代理桥接失败: {}", e);
+                    emit_error!("setup_proxy", "开始获取IP...", 40, &error_msg);
                     state.browser_manager.emit_error(profile_id.clone(), error_msg.clone());
                     error_msg
                 })?;
@@ -223,24 +262,55 @@ async fn do_launch_browser(profile_id: String, state: &AppState) -> Result<(), S
             
             Some(local_addr)
         } else {
-            // 直接使用原始代理地址
             Some(format!("{}://{}:{}", proxy_type, proxy_config.host, proxy_config.port))
         }
     } else {
         None
     };
+    
+    emit_progress!("setup_proxy", "开始获取IP...", 45);
+
+    // 步骤4: 同步指纹信息 (45-65%)
+    emit_progress!("sync_fingerprint", "正在同步指纹信息...", 50);
+
+    // ✅ P0: 写入配置文件（bm_fingerprint.json / bm_cloud.json）
+    ConfigWriter::setup_profile_configs(
+        &profile_dir,
+        &profile.id,
+        &profile.name,
+        &profile.group,
+        &profile.fingerprint,
+    ).map_err(|e| {
+        let error_msg = format!("写入配置文件失败: {}", e);
+        emit_error!("sync_fingerprint", "正在同步指纹信息...", 55, &error_msg);
+        state.browser_manager.emit_error(profile_id.clone(), error_msg.clone());
+        error_msg
+    })?;
+    
+    emit_progress!("sync_fingerprint", "正在同步指纹信息...", 65);
+
+    // 步骤5: 同步缓存配置 (65-80%)
+    emit_progress!("sync_cache", "正在同步缓存配置...", 70);
+    // （当前无额外缓存同步操作，直接进入下一步）
+    emit_progress!("sync_cache", "正在同步缓存配置...", 80);
+
+    // 步骤6: 启动浏览器 (80-100%)
+    emit_progress!("launching", "正在打开浏览器窗口...", 85);
 
     let launcher = BrowserLauncher::new(PathBuf::from(kernel_path));
     let child = launcher
         .launch(&profile_id, &profile_dir, proxy_arg.as_deref(), load_extension_arg.as_deref())
         .map_err(|e| {
             let error_msg = format!("启动浏览器失败: {}", e);
+            emit_error!("launching", "正在打开浏览器窗口...", 90, &error_msg);
             state.browser_manager.emit_error(profile_id.clone(), error_msg.clone());
             error_msg
         })?;
 
     // 注册进程到 BrowserManager
     state.browser_manager.register_process(profile_id.clone(), child).await?;
+
+    emit_progress!("launching", "正在打开浏览器窗口...", 95);
 
     // 更新数据库状态
     {
@@ -249,6 +319,11 @@ async fn do_launch_browser(profile_id: String, state: &AppState) -> Result<(), S
             .await
             .map_err(|e| e.to_string())?;
     }
+
+    // 步骤7: 完成
+    state.browser_manager.emit_progress(
+        profile_id.clone(), "done", "窗口已打开", 100, true, None
+    );
 
     Ok(())
 }
@@ -751,6 +826,24 @@ async fn delete_tag(
     let _ = app.emit("tag:deleted", DeletedEvent { id });
     
     Ok(())
+}
+
+/// 获取窗口的标签列表
+#[tauri::command]
+async fn get_profile_tags(profile_id: String, state: State<'_, AppState>) -> Result<Vec<Tag>, String> {
+    let service = state.tag_service.lock().await;
+    service.get_profile_tags(&profile_id).await.map_err(|e| e.to_string())
+}
+
+/// 设置窗口的标签（替换模式）
+#[tauri::command]
+async fn set_profile_tags(
+    profile_id: String,
+    tag_ids: Vec<String>,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let service = state.tag_service.lock().await;
+    service.set_profile_tags(&profile_id, tag_ids).await.map_err(|e| e.to_string())
 }
 
 // ==================== RecycleBin IPC Commands ====================
@@ -1955,6 +2048,8 @@ pub fn run() {
             create_tag,
             update_tag,
             delete_tag,
+            get_profile_tags,
+            set_profile_tags,
             // RecycleBin commands - ✅ V5 解锁
             get_recycle_bin,
             restore_profile,

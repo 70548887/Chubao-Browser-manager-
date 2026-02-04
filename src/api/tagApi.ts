@@ -121,3 +121,28 @@ export async function deleteTag(id: string): Promise<void> {
         throw new Error(`删除标签失败: ${error}`)
     }
 }
+
+/**
+ * 获取窗口的标签列表
+ */
+export async function getProfileTags(profileId: string): Promise<Tag[]> {
+    try {
+        const dtos = await invoke<TagDto[]>('get_profile_tags', { profileId })
+        return dtos.map(dtoToTag)
+    } catch (error) {
+        console.error('Failed to get profile tags:', error)
+        throw new Error(`获取窗口标签失败: ${error}`)
+    }
+}
+
+/**
+ * 设置窗口的标签（替换模式）
+ */
+export async function setProfileTags(profileId: string, tagIds: string[]): Promise<void> {
+    try {
+        await invoke('set_profile_tags', { profileId, tagIds })
+    } catch (error) {
+        console.error('Failed to set profile tags:', error)
+        throw new Error(`设置窗口标签失败: ${error}`)
+    }
+}

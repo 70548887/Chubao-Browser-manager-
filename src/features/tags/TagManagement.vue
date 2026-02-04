@@ -101,6 +101,8 @@ onUnmounted(() => {
     
     <!-- 列表容器 -->
     <div class="list-container" v-loading="isLoading">
+      <!-- 列表主体 -->
+      <div class="list-body">
         <table v-if="filteredTags.length > 0" class="tag-table">
           <thead>
             <tr>
@@ -176,7 +178,7 @@ onUnmounted(() => {
           </button>
         </div>
       </div>
-
+      
       <!-- 分页区域 -->
       <div v-if="totalCount > 0" class="pagination-bar">
         <div class="page-info">
@@ -197,6 +199,7 @@ onUnmounted(() => {
           />
         </div>
       </div>
+    </div>
 
     <!-- 新建/编辑弹窗 -->
     <el-dialog 
@@ -407,13 +410,19 @@ onUnmounted(() => {
 .list-container {
   flex: 1;
   margin: 0 24px 24px;
-  background: var(--color-bg-elevated);
-  border: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-default);
   border-radius: 12px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   box-shadow: var(--shadow-sm);
+}
+
+.list-body {
+  flex: 1;
+  overflow-y: auto;
+  background-color: #ffffff;
 }
 
 .tag-table {
@@ -428,10 +437,10 @@ onUnmounted(() => {
       text-align: left;
       font-size: 12px;
       font-weight: 600;
-      color: var(--color-text-muted);
+      color: var(--color-text-tertiary);
       text-transform: uppercase;
       letter-spacing: 0.05em;
-      border-bottom: 1px solid var(--color-border);
+      border-bottom: 1px solid var(--color-border-default);
 
       &.col-cb { width: 60px; }
             &.col-index { width: 80px; }
@@ -449,7 +458,7 @@ onUnmounted(() => {
       transition: background-color 0.2s;
 
       &:hover {
-        background-color: var(--color-bg-page);
+        background-color: var(--color-hover-bg);
       }
 
       &:last-child {
@@ -459,7 +468,7 @@ onUnmounted(() => {
       td {
         padding: 16px 24px;
         font-size: 14px;
-        color: var(--color-text-muted);
+        color: var(--color-text-secondary);
 
         &.col-actions {
           text-align: right;
@@ -470,7 +479,7 @@ onUnmounted(() => {
 }
 
 .index-num {
-  color: var(--color-text-muted);
+  color: var(--color-text-tertiary);
 }
 
 .tag-badge {
@@ -483,7 +492,7 @@ onUnmounted(() => {
 }
 
 .sort-num {
-  color: var(--color-text-muted);
+  color: var(--color-text-tertiary);
 }
 
 .count-num {
@@ -492,12 +501,12 @@ onUnmounted(() => {
 }
 
 .time-text {
-  color: var(--color-text-muted);
+  color: var(--color-text-tertiary);
   font-size: 14px;
 }
 
 .remark-text {
-  color: var(--color-text-muted);
+  color: var(--color-text-tertiary);
   font-size: 14px;
   display: block;
   max-width: 300px;
@@ -528,20 +537,20 @@ onUnmounted(() => {
 
   .material-symbols-outlined {
     font-size: 20px;
-    color: var(--color-text-placeholder);
+    color: var(--color-text-disabled);
   }
 
   &.edit:hover {
     background: var(--color-primary-bg);
     .material-symbols-outlined {
-      color: var(--color-primary);
+      color: var(--color-accent-blue);
     }
   }
 
   &.delete:hover {
     background: var(--color-danger-bg);
     .material-symbols-outlined {
-      color: var(--color-danger);
+      color: var(--color-accent-danger);
     }
   }
 }
@@ -569,7 +578,7 @@ onUnmounted(() => {
 
 .empty-icon {
   font-size: 60px;
-  color: var(--color-primary-light);
+  color: var(--color-accent-blue);
 }
 
 .empty-title {
@@ -581,7 +590,7 @@ onUnmounted(() => {
 
 .empty-desc {
   font-size: 18px;
-  color: var(--color-text-muted);
+  color: var(--color-text-tertiary);
   margin: 0 0 24px 0;
   max-width: 500px;
   line-height: 1.6;
@@ -866,15 +875,19 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 24px;
-  background: var(--color-bg-elevated);
-  border-top: 1px solid var(--color-border);
-  border-radius: 0 0 12px 12px;
+  padding: 12px 24px;
+  background-color: #ffffff;
+  border-top: 1px solid var(--color-border-default);
+  flex-shrink: 0;
+  min-height: 48px;
+  flex-wrap: wrap;
+  gap: 8px 16px;
 }
 
 .page-info {
-  font-size: 13px;
-  color: var(--color-text-muted);
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
   
   strong {
     color: var(--color-text-primary);
@@ -886,9 +899,27 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-shrink: 0;
   
   .size-select {
-    width: 100px;
+    width: 90px;
+  }
+}
+
+// 小屏幕适配
+@media (max-width: 768px) {
+  .pagination-bar {
+    padding: 10px 16px;
+    justify-content: center;
+  }
+  
+  .page-info {
+    display: none;
+  }
+  
+  .page-controls {
+    gap: 8px;
+    .size-select { width: 80px; }
   }
 }
 </style>

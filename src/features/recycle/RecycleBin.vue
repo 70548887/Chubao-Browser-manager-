@@ -334,8 +334,8 @@ onUnmounted(() => {
 .list-container {
   flex: 1;
   margin: 0 24px 24px;
-  background: var(--color-bg-elevated);
-  border: 1px solid var(--color-border);
+  background-color: #ffffff;
+  border: 1px solid var(--color-border-default);
   border-radius: 12px;
   display: flex;
   flex-direction: column;
@@ -349,10 +349,10 @@ onUnmounted(() => {
   gap: 16px;
   padding: 12px 24px;
   background: var(--color-bg-page);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border-default);
   font-size: 12px;
   font-weight: 600;
-  color: var(--color-text-muted);
+  color: var(--color-text-tertiary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -360,6 +360,7 @@ onUnmounted(() => {
 .list-body {
   flex: 1;
   overflow-y: auto;
+  background-color: #ffffff;
 }
 
 .list-row {
@@ -370,9 +371,10 @@ onUnmounted(() => {
   align-items: center;
   border-bottom: 1px solid var(--color-border-subtle);
   transition: all 0.2s;
+  background-color: #ffffff;
 
   &:hover {
-    background-color: var(--color-primary-bg);
+    background-color: var(--color-hover-bg);
   }
 
   &:last-child {
@@ -384,14 +386,14 @@ onUnmounted(() => {
   width: 16px;
   height: 16px;
   border-radius: 4px;
-  border: 1px solid var(--color-border-hover);
+  border: 1px solid var(--color-border-strong);
   cursor: pointer;
-  accent-color: var(--color-primary);
+  accent-color: var(--color-accent-blue);
 }
 
 .index-num {
   font-size: 14px;
-  color: var(--color-text-muted);
+  color: var(--color-text-tertiary);
   font-weight: 500;
 }
 
@@ -404,7 +406,7 @@ onUnmounted(() => {
   border-radius: 6px;
   font-size: 12px;
   font-weight: 600;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-border-default);
 }
 
 .window-info {
@@ -473,14 +475,14 @@ onUnmounted(() => {
 
 .window-id {
   font-size: 12px;
-  color: #64748b;
+  color: var(--color-text-tertiary);
   margin: 0;
   font-family: 'Courier New', monospace;
 }
 
 .remark-text {
   font-size: 14px;
-  color: #64748b;
+  color: var(--color-text-tertiary);
   margin: 0;
   white-space: nowrap;
   overflow: hidden;
@@ -497,8 +499,8 @@ onUnmounted(() => {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: #eef2ff;
-  color: #6366f1;
+  background: var(--color-badge-indigo-bg);
+  color: var(--color-badge-indigo-text);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -508,12 +510,12 @@ onUnmounted(() => {
 
 .operator-name {
   font-size: 14px;
-  color: #475569;
+  color: var(--color-text-secondary);
 }
 
 .time-text {
   font-size: 14px;
-  color: #64748b;
+  color: var(--color-text-tertiary);
 }
 
 .row-actions {
@@ -537,7 +539,7 @@ onUnmounted(() => {
   background: transparent;
   border: none;
   border-radius: 6px;
-  color: #94a3b8;
+  color: var(--color-text-disabled);
   cursor: pointer;
   transition: all 0.2s;
 
@@ -546,17 +548,17 @@ onUnmounted(() => {
   }
 
   &:hover {
-    background: #f1f5f9;
-    color: #1e293b;
+    background: var(--color-bg-hover);
+    color: var(--color-text-primary);
 
     &.restore {
-      color: #2563eb;
-      background: #eff6ff;
+      color: var(--color-accent-blue);
+      background: var(--color-primary-bg);
     }
 
     &.delete {
-      color: #ef4444;
-      background: #fef2f2;
+      color: var(--color-accent-danger);
+      background: var(--color-danger-bg);
     }
   }
 }
@@ -572,7 +574,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   padding: 64px 0;
-  color: #94a3b8;
+  color: var(--color-text-disabled);
 
   .material-symbols-outlined {
     font-size: 48px;
@@ -592,25 +594,46 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 12px 24px;
-  background: #f8fafc;
-  border-top: 1px solid #e2e8f0;
+  background-color: #ffffff;
+  border-top: 1px solid var(--color-border-default);
+  flex-shrink: 0;
+  min-height: 48px;
+  flex-wrap: wrap;
+  gap: 8px 16px;
 
   .page-info {
     font-size: 12px;
-    color: #64748b;
+    color: var(--color-text-tertiary);
+    white-space: nowrap;
 
     strong {
-      color: #1e293b;
+      color: var(--color-text-primary);
     }
   }
 
   .page-controls {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 12px;
+    flex-shrink: 0;
 
     .size-select {
-      width: 100px;
+      width: 90px;
+    }
+  }
+  
+  // 小屏幕适配
+  @media (max-width: 768px) {
+    padding: 10px 16px;
+    justify-content: center;
+    
+    .page-info {
+      display: none;
+    }
+    
+    .page-controls {
+      gap: 8px;
+      .size-select { width: 80px; }
     }
   }
 }

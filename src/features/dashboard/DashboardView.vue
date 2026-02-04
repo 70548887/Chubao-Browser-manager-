@@ -4,14 +4,16 @@
  * @author DeepAgent
  */
 
-import { ref, onMounted, inject } from 'vue'
+import { ref, onMounted, inject, onUnmounted } from 'vue'
 import type { Profile } from '@/types/profile.types'
 import ListHeader from './components/ListHeader.vue'
 import ProfileRow from './components/ProfileRow.vue'
 import ProfileDrawer from '@/features/profile-editor/ProfileDrawer.vue'
 import BatchResultDialog from '@/components/BatchResultDialog.vue'
 import ArrangeWindowsDialog from '@/components/ArrangeWindowsDialog.vue'
+import LaunchProgressDialog from '@/components/LaunchProgressDialog.vue'
 import { useDashboard } from './composables/useDashboard'
+import { useLaunchProgress } from '@/composables/useLaunchProgress'
 
 const navigateTo = inject<(page: string) => void>('navigateTo')
 
@@ -76,11 +78,34 @@ const {
   handleClearCache,
   confirmMoveGroup,
   initDashboard,
+  setOnBeforeLaunch,
 } = useDashboard(navigateTo)
+
+// 启动进度对话框
+const {
+  visible: launchProgressVisible,
+  currentProfileName: launchProfileName,
+  progress: launchProgress,
+  error: launchError,
+  steps: launchSteps,
+  startLaunch,
+  closeLaunch,
+  cancelLaunch,
+  stopListening: stopProgressListening,
+} = useLaunchProgress()
+
+// 设置启动前回调
+setOnBeforeLaunch((profileId, profileName) => {
+  startLaunch(profileId, profileName)
+})
 
 // ==================== 生命周期 ====================
 onMounted(async () => {
   await initDashboard()
+})
+
+onUnmounted(() => {
+  stopProgressListening()
 })
 
 // 暴露方法给父组件
@@ -264,6 +289,17 @@ defineExpose({
 
     <!-- 排列窗口对话框 -->
     <ArrangeWindowsDialog v-model:visible="arrangeDialogVisible" :running-count="runningCount" />
+
+    <!-- 启动进度对话框 -->
+    <LaunchProgressDialog
+      :visible="launchProgressVisible"
+      :profile-name="launchProfileName"
+      :progress="launchProgress"
+      :steps="launchSteps"
+      :error="launchError"
+      @close="closeLaunch"
+      @cancel="cancelLaunch"
+    />
   </div>
 </template>
 
@@ -727,10 +763,24 @@ defineExpose({
   border-top: 1px solid var(--color-border-default);
   background: var(--color-bg-overlay);
   transition: background-color var(--duration-normal), border-color var(--duration-normal);
+  min-height: 48px;
+  flex-wrap: wrap;
+  gap: 8px 16px;
 
   .pagination-info {
     color: var(--color-text-tertiary);
     font-size: 12px;
+    white-space: nowrap;
+  }
+  
+  // 小屏幕适配
+  @media (max-width: 768px) {
+    padding: 10px 16px;
+    justify-content: center;
+    
+    .pagination-info {
+      display: none;
+    }
   }
 
   :deep(.el-pagination) {

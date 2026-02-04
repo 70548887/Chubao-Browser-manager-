@@ -184,13 +184,26 @@ export function useDashboard(navigateTo?: (page: string) => void) {
   }
 
   // ==================== 单项操作 ====================
-  const handleLaunch = async (id: string) => {
+  
+  // 启动前回调（用于显示进度对话框）
+  let onBeforeLaunch: ((profileId: string, profileName: string) => void) | null = null
+  
+  const setOnBeforeLaunch = (callback: (profileId: string, profileName: string) => void) => {
+    onBeforeLaunch = callback
+  }
+  
+  const handleLaunch = async (id: string, profileName?: string) => {
     const isSettingOk = await checkSystemSettings()
     if (!isSettingOk) return
     
+    // 触发启动前回调（显示进度对话框）
+    const profile = filteredProfiles.value.find(p => p.id === id)
+    const name = profileName || profile?.name || ''
+    onBeforeLaunch?.(id, name)
+    
     try {
       await profileStore.startProfile(id)
-      Message.success('启动成功')
+      // 不再在这里显示成功消息，进度对话框会显示
     } catch (e: any) {
       Message.error(e.message || '启动失败')
     }
@@ -598,5 +611,6 @@ export function useDashboard(navigateTo?: (page: string) => void) {
     handleClearCache,
     handleArrangeWindows,
     initDashboard,
+    setOnBeforeLaunch,
   }
 }

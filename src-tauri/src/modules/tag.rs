@@ -267,6 +267,30 @@ impl TagService {
 
         Ok(())
     }
+
+    /// 设置窗口的所有标签（替换模式）
+    pub async fn set_profile_tags(&self, profile_id: &str, tag_ids: Vec<String>) -> Result<()> {
+        // 先删除该窗口的所有标签
+        sqlx::query("DELETE FROM profile_tags WHERE profile_id = ?")
+            .bind(profile_id)
+            .execute(&self.pool)
+            .await?;
+
+        // 再添加新的标签
+        let now = Utc::now().to_rfc3339();
+        for tag_id in tag_ids {
+            sqlx::query(
+                "INSERT OR IGNORE INTO profile_tags (profile_id, tag_id, created_at) VALUES (?, ?, ?)"
+            )
+            .bind(profile_id)
+            .bind(&tag_id)
+            .bind(&now)
+            .execute(&self.pool)
+            .await?;
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]

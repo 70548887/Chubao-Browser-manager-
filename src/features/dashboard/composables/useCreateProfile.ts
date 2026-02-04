@@ -8,12 +8,14 @@ import { Message } from '@/utils/message'
 import { useGroupStore } from '@/stores/groupStore'
 import { useProfileStore } from '@/stores/profile.store'
 import { filterFingerprintWhitelist, FINGERPRINT_SCHEMA_VERSION } from '@/config/fingerprint.config'
+import { setProfileTags } from '@/api/tagApi'
 
 // 表单数据类型
 export interface CreateProfileFormData {
   // 第一步：窗口信息
   name: string
   group: string
+  tagIds: string[]  // 标签 ID 列表
   cookie: string
   remark: string
   startupPage: 'blank' | 'url'
@@ -174,6 +176,7 @@ export function useCreateProfile(emit: {
     // 第一步：窗口信息
     name: '',
     group: 'default',
+    tagIds: [],  // 标签 ID 列表
     cookie: '',
     remark: '',
     startupPage: 'blank',
@@ -366,6 +369,16 @@ export function useCreateProfile(emit: {
       })
       
       if (newProfile) {
+        // 如果选择了标签，设置标签关联
+        if (formData.tagIds && formData.tagIds.length > 0) {
+          try {
+            await setProfileTags(newProfile.id, formData.tagIds)
+          } catch (error) {
+            console.error('Failed to set profile tags:', error)
+            // 标签设置失败不影响主流程
+          }
+        }
+        
         emit('created', newProfile)
         emit('update:visible', false)
         Message.success('创建成功')

@@ -831,6 +831,7 @@ const {
 .list-body {
   flex: 1;
   overflow-y: auto;
+  background: var(--color-bg-secondary);
 }
 
 .list-row-grid {
@@ -1037,22 +1038,43 @@ const {
   align-items: center;
   justify-content: space-between;
   padding: 12px 24px;
-  background: #f8fafc;
-  border-top: 1px solid #e2e8f0;
+  background-color: #ffffff;
+  border-top: 1px solid var(--color-border-default);
+  flex-shrink: 0;
+  min-height: 48px;
+  flex-wrap: wrap;
+  gap: 8px 16px;
 
   .page-info {
     font-size: 12px;
-    color: #64748b;
-    strong { color: #1e293b; }
+    color: var(--color-text-tertiary);
+    white-space: nowrap;
+    strong { color: var(--color-text-primary); }
   }
 
   .page-controls {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 12px;
+    flex-shrink: 0;
 
     .size-select {
-      width: 100px;
+      width: 90px;
+    }
+  }
+  
+  // 小屏幕适配
+  @media (max-width: 768px) {
+    padding: 10px 16px;
+    justify-content: center;
+    
+    .page-info {
+      display: none;
+    }
+    
+    .page-controls {
+      gap: 8px;
+      .size-select { width: 80px; }
     }
   }
 }

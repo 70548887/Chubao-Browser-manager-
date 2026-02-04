@@ -16,6 +16,7 @@ import PreferencesForm from './components/PreferencesForm.vue'
 import type { Profile } from '@/types'
 import { filterFingerprintWhitelist, detectFingerprintBlacklist } from '@/config/fingerprint.config'
 import { calculateFingerprintPatch } from '@/utils/fingerprintDiff'
+import { getProfileTags } from '@/api/tagApi'
 
 interface Props {
   visible: boolean
@@ -121,6 +122,40 @@ const handlePrev = () => {
   prevStep()
 }
 
+// 检查标签是否有变化
+const checkTagChanges = async () => {
+  if (!basicFormRef.value || !props.profile) return false
+  
+  try {
+    // 获取当前选中的标签
+    const currentTagIds = basicFormRef.value.getSelectedTagIds()
+    
+    // 获取原始标签（从数据库查询）
+    const originalTags = await getProfileTags(props.profile.id)
+    const originalIds = originalTags.map(t => t.id)
+    
+    // 比较数组
+    if (currentTagIds.length !== originalIds.length) {
+      console.log('[标签变化] 数量不同:', currentTagIds.length, 'vs', originalIds.length)
+      return true
+    }
+    
+    // 排序后比较
+    const sortedCurrent = [...currentTagIds].sort()
+    const sortedOriginal = [...originalIds].sort()
+    
+    const hasChanges = sortedCurrent.some((id, index) => id !== sortedOriginal[index])
+    if (hasChanges) {
+      console.log('[标签变化] 内容不同:', sortedCurrent, 'vs', sortedOriginal)
+    }
+    
+    return hasChanges
+  } catch (error) {
+    console.error('Failed to check tag changes:', error)
+    return false
+  }
+}
+
 // 保存
 const handleSave = async () => {
   try {
@@ -179,14 +214,32 @@ const handleSave = async () => {
         updateData.proxy = formData.value.proxy
       }
 
+      // 检查标签是否有变化
+      const hasTagChanges = await checkTagChanges()
+
       // 检查是否有任何变化
-      if (Object.keys(updateData).length === 0) {
+      if (Object.keys(updateData).length === 0 && !hasTagChanges) {
         Message.info('没有修改内容')
         handleClose()
         return
       }
 
-      await profileStore.updateProfile(props.profile.id, updateData)
+      // 如果有 profile 字段变化，才调用 updateProfile
+      if (Object.keys(updateData).length > 0) {
+        await profileStore.updateProfile(props.profile.id, updateData)
+      }
+      
+      // 保存标签关联（如果有变化）
+      if (hasTagChanges) {
+        try {
+          await basicFormRef.value?.saveTags()
+          console.log('[编辑] 标签已保存')
+        } catch (error) {
+          console.error('Failed to save tags:', error)
+          Message.error('标签保存失败')
+        }
+      }
+      
       // 注意：不在这里显示成功消息，eventListener.ts 会监听 profile:updated 事件并显示
     } else {
       // 创建模式
@@ -302,7 +355,7 @@ watch(() => props.profile, (newProfile) => {
       <div class="form-container">
         <!-- 第1步：窗口信息 -->
         <div v-show="currentStep === 0" class="form-section">
-          <BasicInfoForm ref="basicFormRef" v-model="formData" />
+          <BasicInfoForm ref="basicFormRef" v-model="formData" :profile-id="profile?.id" />
         </div>
 
         <!-- 第2步：基础设置 -->

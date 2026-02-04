@@ -3,12 +3,14 @@
  * @description 基础信息表单
  */
 
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import type { ProfileCreateDTO } from '@/types'
 import { useGroupStore } from '@/stores/groupStore'
+import { getTags, getProfileTags, setProfileTags, type Tag } from '@/api/tagApi'
 
 interface Props {
   modelValue: ProfileCreateDTO
+  profileId?: string  // 编辑模式时传入
 }
 
 interface Emits {
@@ -21,10 +23,88 @@ const emit = defineEmits<Emits>()
 const formRef = ref()
 const groupStore = useGroupStore()
 
-// 初始化分组数据
-onMounted(() => {
-  groupStore.initGroups()
+// 标签相关状态
+const tagList = ref<Tag[]>([])
+const selectedTagIds = ref<string[]>([])
+const tagLoading = ref(false)
+const showTagDropdown = ref(false)
+
+// 标签颜色配置
+const tagColors: Record<string, { bg: string; text: string }> = {
+  blue: { bg: '#dbeafe', text: '#2563eb' },
+  green: { bg: '#dcfce7', text: '#16a34a' },
+  purple: { bg: '#f3e8ff', text: '#9333ea' },
+  orange: { bg: '#ffedd5', text: '#ea580c' },
+  red: { bg: '#fee2e2', text: '#dc2626' },
+  cyan: { bg: '#cffafe', text: '#0891b2' },
+  pink: { bg: '#fce7f3', text: '#db2777' },
+  yellow: { bg: '#fef9c3', text: '#ca8a04' },
+}
+
+const getTagColor = (tag: Tag) => {
+  const color = (tag as any).color || 'blue'
+  return tagColors[color] || tagColors.blue
+}
+
+// 已选中的标签对象列表
+const selectedTags = computed(() => {
+  if (!selectedTagIds.value.length || !tagList.value.length) return []
+  return tagList.value.filter(tag => selectedTagIds.value.includes(tag.id))
 })
+
+// 可选的标签（未选中的）
+const availableTags = computed(() => {
+  if (!tagList.value.length) return []
+  return tagList.value.filter(tag => !selectedTagIds.value.includes(tag.id))
+})
+
+// 初始化数据
+onMounted(async () => {
+  groupStore.initGroups()
+  
+  // 加载标签列表
+  try {
+    tagLoading.value = true
+    tagList.value = await getTags()
+  } catch (error) {
+    console.error('Failed to load tags:', error)
+  } finally {
+    tagLoading.value = false
+  }
+})
+
+// 监听 profileId 变化（切换编辑窗口时）
+watch(() => props.profileId, async (newId) => {
+  console.log('[BasicInfoForm] profileId 变化:', newId)
+  if (newId) {
+    try {
+      const profileTags = await getProfileTags(newId)
+      selectedTagIds.value = profileTags.map(t => t.id)
+      console.log('[BasicInfoForm] 已加载窗口标签:', selectedTagIds.value, '标签对象:', profileTags)
+    } catch (error) {
+      console.error('Failed to load profile tags:', error)
+      selectedTagIds.value = []
+    }
+  } else {
+    selectedTagIds.value = []
+  }
+}, { immediate: true })
+
+// 添加标签
+const addTag = (tagId: string) => {
+  if (!selectedTagIds.value.includes(tagId)) {
+    selectedTagIds.value.push(tagId)
+  }
+  showTagDropdown.value = false
+}
+
+// 移除标签
+const removeTag = (tagId: string) => {
+  const index = selectedTagIds.value.indexOf(tagId)
+  if (index > -1) {
+    selectedTagIds.value.splice(index, 1)
+  }
+}
 
 // 更新表单数据
 const updateField = (field: keyof ProfileCreateDTO, value: any) => {
@@ -50,14 +130,31 @@ const startupPageType = computed(() => {
   return props.modelValue.preferences?.startupPage || 'blank'
 })
 
+// 保存标签
+const saveTags = async () => {
+  if (props.profileId) {
+    try {
+      await setProfileTags(props.profileId, selectedTagIds.value)
+    } catch (error) {
+      console.error('Failed to save tags:', error)
+      throw error
+    }
+  }
+}
+
 // 验证表单
 const validate = () => {
   return formRef.value?.validate()
 }
 
-// 暴露验证方法
+// 获取选中的标签 ID
+const getSelectedTagIds = () => selectedTagIds.value
+
+// 暴露方法
 defineExpose({
   validate,
+  saveTags,
+  getSelectedTagIds,
 })
 </script>
 
@@ -100,6 +197,63 @@ defineExpose({
               </option>
             </select>
             <span class="material-symbols-outlined select-icon">expand_more</span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 标签 -->
+      <div class="form-row">
+        <label class="form-label">标签 <span class="optional">(选填)</span></label>
+        <div class="form-control">
+          <div class="tag-input-wrapper">
+            <!-- 已选标签列表 -->
+            <div 
+              v-for="tag in selectedTags" 
+              :key="tag.id"
+              class="tag-badge"
+              :style="{
+                '--tag-bg': getTagColor(tag).bg,
+                '--tag-color': getTagColor(tag).text
+              }"
+            >
+              <span class="tag-text">{{ tag.name }}</span>
+              <span class="tag-remove" @click="removeTag(tag.id)">
+                <span class="material-symbols-outlined">close</span>
+              </span>
+            </div>
+            
+            <!-- 添加按钮 -->
+            <div class="tag-add-wrapper" v-if="availableTags.length > 0">
+              <button 
+                type="button" 
+                class="tag-add-btn"
+                @click="showTagDropdown = !showTagDropdown"
+              >
+                <span class="material-symbols-outlined">add</span>
+                <span>添加标签</span>
+              </button>
+              
+              <!-- 下拉选择器 -->
+              <div v-if="showTagDropdown" class="tag-dropdown">
+                <div 
+                  v-for="tag in availableTags" 
+                  :key="tag.id"
+                  class="tag-option"
+                  :style="{
+                    '--tag-bg': getTagColor(tag).bg,
+                    '--tag-color': getTagColor(tag).text
+                  }"
+                  @click="addTag(tag.id)"
+                >
+                  {{ tag.name }}
+                </div>
+              </div>
+            </div>
+            
+            <!-- 无标签提示 -->
+            <span v-if="tagList.length === 0 && !tagLoading" class="tag-empty-hint">
+              暂无标签
+            </span>
           </div>
         </div>
       </div>
@@ -429,5 +583,134 @@ defineExpose({
 
 .mt-2 {
   margin-top: 8px;
+}
+
+// 标签输入器
+.tag-input-wrapper {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+}
+
+// 已选标签徽章
+.tag-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px 4px 12px;
+  background: var(--tag-bg);
+  color: var(--tag-color);
+  border-radius: 16px;
+  font-size: 13px;
+  font-weight: 500;
+  position: relative;
+  
+  .tag-text {
+    line-height: 1.2;
+  }
+  
+  .tag-remove {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    cursor: pointer;
+    opacity: 0;
+    transition: all 0.2s;
+    background: rgba(0, 0, 0, 0.1);
+    
+    .material-symbols-outlined {
+      font-size: 14px;
+    }
+  }
+  
+  &:hover .tag-remove {
+    opacity: 1;
+  }
+}
+
+// 添加按钮包装器
+.tag-add-wrapper {
+  position: relative;
+}
+
+// 添加按钮
+.tag-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  background: #f1f5f9;
+  border: 1px dashed #cbd5e1;
+  border-radius: 16px;
+  font-size: 13px;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s;
+  
+  .material-symbols-outlined {
+    font-size: 16px;
+  }
+  
+  &:hover {
+    background: #e2e8f0;
+    border-color: #94a3b8;
+    color: #475569;
+  }
+}
+
+// 下拉选择器
+.tag-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 150px;
+  max-height: 200px;
+  overflow-y: auto;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 100;
+}
+
+// 下拉选项
+.tag-option {
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s;
+  
+  &:hover {
+    background: var(--tag-bg);
+    color: var(--tag-color);
+  }
+  
+  &:first-child {
+    border-radius: 7px 7px 0 0;
+  }
+  
+  &:last-child {
+    border-radius: 0 0 7px 7px;
+  }
+  
+  &:only-child {
+    border-radius: 7px;
+  }
+}
+
+.tag-empty-hint {
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+.optional {
+  font-weight: 400;
+  color: #94a3b8;
+  font-size: 12px;
 }
 </style>
