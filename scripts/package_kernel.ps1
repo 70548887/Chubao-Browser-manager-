@@ -4,7 +4,7 @@
 param(
     [string]$SourceDir = "D:\chromium_src\chromium_139_src\src\out\Release",
     [string]$OutputDir = "D:\browser-manager\dist",
-    [string]$OutputFile = "chromium-kernel-win64-v139.7z"
+    [string]$OutputFile = "chromium-kernel-win64-v146.zip"
 )
 
 $ErrorActionPreference = "Stop"
@@ -136,10 +136,10 @@ $chromeExePath = Join-Path $TempDir "chrome.exe"
 if (Test-Path $chromeExePath) {
     $chromeVersion = (Get-Item $chromeExePath).VersionInfo.ProductVersion
     if (-not $chromeVersion) {
-        $chromeVersion = "139.0.0.0"
+        $chromeVersion = "146.0.0.0"
     }
 } else {
-    $chromeVersion = "139.0.0.0"
+    $chromeVersion = "146.0.0.0"
 }
 
 $versionInfo = @{

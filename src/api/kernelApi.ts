@@ -133,4 +133,4 @@ export function onDownloadError(callback: (error: string) => void): Promise<Unli
 }
 
 // Default kernel download URL
-export const DEFAULT_KERNEL_URL = 'https://github.com/70548887/Chubao-Browser-manager-/releases/download/v0.1.0/chromium-kernel-win64-v139.zip'
+export const DEFAULT_KERNEL_URL = 'https://github.com/70548887/Chubao-Browser-manager-/releases/download/v0.2.0-kernel146/chromium-kernel-win64-v146.zip'
