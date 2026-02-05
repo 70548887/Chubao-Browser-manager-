@@ -82,6 +82,13 @@ export function useLaunchProgress() {
       updateStep(event.step, event.label, 'error', event.error)
     } else if (event.done) {
       updateStep(event.step, event.label, 'done')
+      
+      // 如果进度达到 100%，自动关闭对话框（延迟 1 秒让用户看到完成状态）
+      if (event.progress >= 100) {
+        setTimeout(() => {
+          closeLaunch()
+        }, 1000)
+      }
     } else {
       updateStep(event.step, event.label, 'running')
     }

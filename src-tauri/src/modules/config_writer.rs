@@ -4,7 +4,6 @@
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::fs;
-use chrono::{DateTime, Utc};
 
 // ============================================================================
 // bm_fingerprint.json Schema - 匹配内核实际期望的格式
@@ -16,6 +15,7 @@ use chrono::{DateTime, Utc};
 pub struct KernelUaConfig {
     #[serde(rename = "type")]
     pub config_type: i32,
+    #[serde(rename = "userAgent")]
     pub user_agent: String,
 }
 
@@ -131,21 +131,33 @@ impl Default for KernelWebGLDeviceConfig {
 
 /// Canvas 配置 - 匹配内核 canvas 字段
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KernelCanvasColoredPoint {
+    pub row: i32,
+    pub column: i32,
+    pub red: i32,
+    pub green: i32,
+    pub blue: i32,
+    pub alpha: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct KernelCanvasConfig {
     #[serde(rename = "type")]
     pub config_type: i32,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub noise_enabled: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub noise_factor: Option<f64>,
+    pub colored_point_list: Vec<KernelCanvasColoredPoint>,
 }
 
 impl Default for KernelCanvasConfig {
     fn default() -> Self {
         Self {
             config_type: 2,
-            noise_enabled: Some(true),
-            noise_factor: Some(0.001),
+            colored_point_list: vec![
+                KernelCanvasColoredPoint { row: 10, column: 10, red: 1, green: -1, blue: 2, alpha: 0 },
+                KernelCanvasColoredPoint { row: 50, column: 50, red: -2, green: 1, blue: -1, alpha: 0 },
+                KernelCanvasColoredPoint { row: 100, column: 100, red: 2, green: -2, blue: 1, alpha: 0 },
+            ],
         }
     }
 }
@@ -155,44 +167,87 @@ impl Default for KernelCanvasConfig {
 pub struct KernelAudioContextConfig {
     #[serde(rename = "type")]
     pub config_type: i32,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub noise_enabled: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub noise: Option<Vec<f64>>,
+    pub noise: Vec<f64>,
 }
 
 impl Default for KernelAudioContextConfig {
     fn default() -> Self {
         Self {
             config_type: 2,
-            noise_enabled: Some(true),
-            noise: None,
+            noise: vec![0.0001, -0.0002, 0.0001, -0.0001, 0.0002],
         }
     }
 }
 
 /// Font 配置 - 匹配内核 font 字段
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KernelFontMetrics {
+    pub id: u32,
+    pub width: f64,
+    pub height: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub actual_bounding_box_ascent: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub actual_bounding_box_descent: Option<f64>,
+    pub file_paths: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct KernelFontConfig {
     #[serde(rename = "type")]
     pub config_type: i32,
-    pub fonts: Vec<String>,
+    pub max_id: u32,
+    pub default_id: u32,
+    pub default_name: String,
+    pub default_paths: Vec<String>,
+    pub font_map: std::collections::HashMap<String, KernelFontMetrics>,
+    pub font_id_map: std::collections::HashMap<String, String>,
 }
 
 impl Default for KernelFontConfig {
     fn default() -> Self {
+        use std::collections::HashMap;
+        
+        let mut font_map = HashMap::new();
+        let mut font_id_map = HashMap::new();
+        
+        // Windows 常见字体
+        let fonts = vec![
+            ("Arial", "C:\\Windows\\Fonts\\arial.ttf", 10.5, 12.0, 10.0, 2.0),
+            ("Times New Roman", "C:\\Windows\\Fonts\\times.ttf", 9.8, 11.5, 9.5, 2.0),
+            ("Verdana", "C:\\Windows\\Fonts\\verdana.ttf", 11.2, 12.5, 10.5, 2.0),
+            ("Courier New", "C:\\Windows\\Fonts\\cour.ttf", 9.6, 12.0, 10.0, 2.0),
+            ("Georgia", "C:\\Windows\\Fonts\\georgia.ttf", 10.0, 12.0, 10.0, 2.0),
+            ("Tahoma", "C:\\Windows\\Fonts\\tahoma.ttf", 10.3, 12.0, 10.0, 2.0),
+            ("Segoe UI", "C:\\Windows\\Fonts\\segoeui.ttf", 10.1, 12.0, 10.0, 2.0),
+            ("Microsoft YaHei", "C:\\Windows\\Fonts\\msyh.ttc", 12.0, 14.0, 12.0, 2.0),
+            ("Calibri", "C:\\Windows\\Fonts\\calibri.ttf", 10.2, 12.0, 10.0, 2.0),
+            ("Consolas", "C:\\Windows\\Fonts\\consola.ttf", 9.8, 12.0, 10.0, 2.0),
+        ];
+        
+        for (idx, (name, path, width, height, ascent, descent)) in fonts.iter().enumerate() {
+            let id = (idx + 1) as u32;
+            font_map.insert(name.to_string(), KernelFontMetrics {
+                id,
+                width: *width,
+                height: *height,
+                actual_bounding_box_ascent: Some(*ascent),
+                actual_bounding_box_descent: Some(*descent),
+                file_paths: vec![path.to_string()],
+            });
+            font_id_map.insert(id.to_string(), name.to_string());
+        }
+        
         Self {
             config_type: 2,
-            fonts: vec![
-                "Arial".to_string(),
-                "Calibri".to_string(),
-                "Cambria".to_string(),
-                "Consolas".to_string(),
-                "Microsoft YaHei".to_string(),
-                "SimSun".to_string(),
-                "Times New Roman".to_string(),
-                "Verdana".to_string(),
-            ],
+            max_id: 100,
+            default_id: 1,
+            default_name: "Arial".to_string(),
+            default_paths: vec!["C:\\Windows\\Fonts\\arial.ttf".to_string()],
+            font_map,
+            font_id_map,
         }
     }
 }
@@ -202,17 +257,25 @@ impl Default for KernelFontConfig {
 pub struct KernelClientRectsConfig {
     #[serde(rename = "type")]
     pub config_type: i32,
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
 }
 
 impl Default for KernelClientRectsConfig {
     fn default() -> Self {
         Self {
             config_type: 2,
+            x: 0.00001,
+            y: 0.00002,
+            width: 0.00001,
+            height: 0.00002,
         }
     }
 }
 
-/// MediaDevices 配置 - 匹配内核 mediaDevices 字段
+/// MediaDevices 配置 - 匹配内核 mediaDevices 字段（保留旧版本兼容）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct KernelMediaDevicesConfig {
@@ -234,12 +297,252 @@ impl Default for KernelMediaDevicesConfig {
     }
 }
 
+/// WebRTC 配置 - 匹配内核 webrtc 字段
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KernelWebRtcConfig {
+    #[serde(rename = "type")]
+    pub config_type: i32,
+    pub private_ip: String,
+    pub public_ip: String,
+}
+
+impl Default for KernelWebRtcConfig {
+    fn default() -> Self {
+        Self {
+            config_type: 2,
+            private_ip: "192.168.1.100".to_string(),
+            public_ip: "203.0.113.50".to_string(),
+        }
+    }
+}
+
+/// Location 配置 - 匹配内核 location 字段
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KernelLocationConfig {
+    #[serde(rename = "type")]
+    pub config_type: i32,
+    pub permissions: bool,
+    pub latitude: f64,
+    pub longitude: f64,
+    pub accuracy: f64,
+}
+
+impl Default for KernelLocationConfig {
+    fn default() -> Self {
+        Self {
+            config_type: 2,
+            permissions: true,
+            latitude: 39.904200,
+            longitude: 116.407396,
+            accuracy: 50.0,
+        }
+    }
+}
+
+/// Variations 配置 - 匹配内核 variations 字段
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KernelVariationsConfig {
+    #[serde(rename = "type")]
+    pub config_type: i32,
+    pub seed_type: String,
+    pub variations_list: Vec<String>,
+}
+
+impl Default for KernelVariationsConfig {
+    fn default() -> Self {
+        Self {
+            config_type: 2,
+            seed_type: "Custom".to_string(),
+            variations_list: vec![
+                "DeepChrome-Test-001".to_string(),
+                "FingerprintHook-Enabled".to_string(),
+                "CustomVariation-12345".to_string(),
+            ],
+        }
+    }
+}
+
+/// Battery 配置 - 匹配内核 battery 字段
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KernelBatteryConfig {
+    #[serde(rename = "type")]
+    pub config_type: i32,
+    pub charging: bool,
+    pub charging_time: u32,
+    pub discharging_time: u32,
+    pub level: f64,
+}
+
+impl Default for KernelBatteryConfig {
+    fn default() -> Self {
+        Self {
+            config_type: 2,
+            charging: false,
+            charging_time: 3600,
+            discharging_time: 7200,
+            level: 0.75,
+        }
+    }
+}
+
+/// NetworkInfo 配置 - 匹配内核 networkInfo 字段
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KernelNetworkInfoConfig {
+    #[serde(rename = "type")]
+    pub config_type: i32,
+    pub effective_type: String,
+    pub downlink: f64,
+    pub rtt: u32,
+    pub save_data: bool,
+}
+
+impl Default for KernelNetworkInfoConfig {
+    fn default() -> Self {
+        Self {
+            config_type: 2,
+            effective_type: "4g".to_string(),
+            downlink: 8.5,
+            rtt: 100,
+            save_data: false,
+        }
+    }
+}
+
+/// MediaEquipment Device - 匹配内核 mediaEquipment.list 数组项
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KernelMediaDevice {
+    pub device_id: String,
+    pub kind: String,
+    pub label: String,
+    pub group_id: String,
+}
+
+/// MediaEquipment 配置 - 匹配内核 mediaEquipment 字段
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KernelMediaEquipmentConfig {
+    #[serde(rename = "type")]
+    pub config_type: i32,
+    pub list: Vec<KernelMediaDevice>,
+}
+
+impl Default for KernelMediaEquipmentConfig {
+    fn default() -> Self {
+        Self {
+            config_type: 2,
+            list: vec![
+                KernelMediaDevice {
+                    device_id: "default-audio-input-001".to_string(),
+                    kind: "audioinput".to_string(),
+                    label: "DeepChrome Virtual Microphone".to_string(),
+                    group_id: "group-001".to_string(),
+                },
+                KernelMediaDevice {
+                    device_id: "default-audio-output-001".to_string(),
+                    kind: "audiooutput".to_string(),
+                    label: "DeepChrome Virtual Speaker".to_string(),
+                    group_id: "group-001".to_string(),
+                },
+                KernelMediaDevice {
+                    device_id: "default-video-input-001".to_string(),
+                    kind: "videoinput".to_string(),
+                    label: "DeepChrome Virtual Camera".to_string(),
+                    group_id: "group-002".to_string(),
+                },
+            ],
+        }
+    }
+}
+
+/// Device 配置 - 匹配内核 device 字段
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KernelDeviceConfig {
+    #[serde(rename = "type")]
+    pub config_type: i32,
+    pub name: String,
+    pub mac_address: String,
+}
+
+impl Default for KernelDeviceConfig {
+    fn default() -> Self {
+        Self {
+            config_type: 2,
+            name: "DESKTOP-W0KJT6V0".to_string(),
+            mac_address: "64-2B-7A-4D-96-E1".to_string(),
+        }
+    }
+}
+
+/// DoNotTrack 配置 - 匹配内核 doNotTrack 字段
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KernelDoNotTrackConfig {
+    #[serde(rename = "type")]
+    pub config_type: i32,
+    pub flag: bool,
+}
+
+impl Default for KernelDoNotTrackConfig {
+    fn default() -> Self {
+        Self {
+            config_type: 2,
+            flag: true,
+        }
+    }
+}
+
+/// OpenPort 配置 - 匹配内核 openPort 字段
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KernelOpenPortConfig {
+    #[serde(rename = "type")]
+    pub config_type: i32,
+}
+
+impl Default for KernelOpenPortConfig {
+    fn default() -> Self {
+        Self {
+            config_type: 1,  // type 为 1 表示默认行为
+        }
+    }
+}
+
+/// WebGPU 配置 - 匹配内核 webgpu 字段
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KernelWebGpuConfig {
+    #[serde(rename = "type")]
+    pub config_type: i32,
+    pub adapter_name: String,
+    pub vendor: String,
+    pub architecture: String,
+    pub force_fallback: bool,
+}
+
+impl Default for KernelWebGpuConfig {
+    fn default() -> Self {
+        Self {
+            config_type: 2,
+            adapter_name: "DeepChrome Virtual GPU".to_string(),
+            vendor: "DeepChrome".to_string(),
+            architecture: "virtual".to_string(),
+            force_fallback: false,
+        }
+    }
+}
+
 /// 完整指纹配置 (bm_fingerprint.json) - 匹配内核期望的格式
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FingerprintFileConfig {
     pub init: i32,
+    pub seed: String,
+    pub device: KernelDeviceConfig,
     pub ua: KernelUaConfig,
+    #[serde(rename = "resourceInfo")]
     pub resource_info: KernelResourceInfoConfig,
     pub resolution: KernelResolutionConfig,
     #[serde(rename = "timeZone")]
@@ -251,16 +554,29 @@ pub struct FingerprintFileConfig {
     #[serde(rename = "audioContext")]
     pub audio_context: KernelAudioContextConfig,
     pub font: KernelFontConfig,
+    pub webrtc: KernelWebRtcConfig,
     #[serde(rename = "clientRects")]
     pub client_rects: KernelClientRectsConfig,
-    #[serde(rename = "mediaDevices")]
-    pub media_devices: KernelMediaDevicesConfig,
+    pub location: KernelLocationConfig,
+    pub variations: KernelVariationsConfig,
+    pub battery: KernelBatteryConfig,
+    #[serde(rename = "networkInfo")]
+    pub network_info: KernelNetworkInfoConfig,
+    #[serde(rename = "mediaEquipment")]
+    pub media_equipment: KernelMediaEquipmentConfig,
+    #[serde(rename = "doNotTrack")]
+    pub do_not_track: KernelDoNotTrackConfig,
+    #[serde(rename = "openPort")]
+    pub open_port: KernelOpenPortConfig,
+    pub webgpu: KernelWebGpuConfig,
 }
 
 impl Default for FingerprintFileConfig {
     fn default() -> Self {
         Self {
             init: 2,
+            seed: "12345678901234567890".to_string(),
+            device: KernelDeviceConfig::default(),
             ua: KernelUaConfig::default(),
             resource_info: KernelResourceInfoConfig::default(),
             resolution: KernelResolutionConfig::default(),
@@ -270,8 +586,16 @@ impl Default for FingerprintFileConfig {
             canvas: KernelCanvasConfig::default(),
             audio_context: KernelAudioContextConfig::default(),
             font: KernelFontConfig::default(),
+            webrtc: KernelWebRtcConfig::default(),
             client_rects: KernelClientRectsConfig::default(),
-            media_devices: KernelMediaDevicesConfig::default(),
+            location: KernelLocationConfig::default(),
+            variations: KernelVariationsConfig::default(),
+            battery: KernelBatteryConfig::default(),
+            network_info: KernelNetworkInfoConfig::default(),
+            media_equipment: KernelMediaEquipmentConfig::default(),
+            do_not_track: KernelDoNotTrackConfig::default(),
+            open_port: KernelOpenPortConfig::default(),
+            webgpu: KernelWebGpuConfig::default(),
         }
     }
 }
@@ -800,7 +1124,7 @@ impl ConfigWriter {
     
     /// 从 Profile Fingerprint 构建完整的配置文件 - 匹配内核格式
     fn build_fingerprint_config(
-        _profile_id: &str,
+        profile_id: &str,
         fp: &crate::modules::profile::Fingerprint,
     ) -> FingerprintFileConfig {
         // 解析屏幕分辨率
@@ -808,6 +1132,15 @@ impl ConfigWriter {
         
         FingerprintFileConfig {
             init: 2,
+            seed: profile_id.to_string(),
+            
+            device: KernelDeviceConfig {
+                config_type: 2,
+                name: fp.device_name.clone().unwrap_or_else(|| 
+                    format!("DESKTOP-{}", &profile_id[..8].to_uppercase())
+                ),
+                mac_address: fp.mac_address.clone().unwrap_or_else(|| "64-2B-7A-4D-96-E1".to_string()),
+            },
             
             ua: KernelUaConfig {
                 config_type: 2,
@@ -837,26 +1170,55 @@ impl ConfigWriter {
             language: KernelLanguageConfig {
                 config_type: 2,
                 interface_language: fp.language.clone(),
-                languages: vec![fp.language.clone(), "en".to_string()],
+                languages: {
+                    let primary = fp.language.clone();
+                    let primary_short = primary.split('-').next().unwrap_or(&primary).to_string();
+                    let mut langs = vec![primary.clone()];
+                    if primary_short != primary {
+                        langs.push(primary_short);
+                    }
+                    // 添加英语作为备用
+                    if !primary.starts_with("en") {
+                        langs.push("en-US".to_string());
+                        langs.push("en".to_string());
+                    }
+                    langs
+                },
             },
             
-            webgl_device: KernelWebGLDeviceConfig::default(),
-            
-            canvas: KernelCanvasConfig {
+            webgl_device: KernelWebGLDeviceConfig {
                 config_type: 2,
-                noise_enabled: Some(fp.canvas_noise),
-                noise_factor: Some(0.001),
+                vendors: fp.webgl_vendor.clone().unwrap_or_else(|| "Google Inc. (Intel)".to_string()),
+                renderer: fp.webgl_renderer.clone().unwrap_or_else(|| 
+                    "ANGLE (Intel, Intel(R) UHD Graphics 630 Direct3D11 vs_5_0 ps_5_0, D3D11)".to_string()
+                ),
             },
             
-            audio_context: KernelAudioContextConfig {
-                config_type: 2,
-                noise_enabled: Some(fp.audio_noise),
-                noise: None,
-            },
+            canvas: KernelCanvasConfig::default(),
+            
+            audio_context: KernelAudioContextConfig::default(),
             
             font: KernelFontConfig::default(),
+            
+            webrtc: KernelWebRtcConfig {
+                config_type: 2,
+                private_ip: fp.webrtc_local_ip.clone().unwrap_or_else(|| 
+                    format!("192.168.1.{}", 100 + (profile_id.len() % 154))
+                ),
+                public_ip: fp.webrtc_public_ip.clone().unwrap_or_else(|| "203.0.113.50".to_string()),
+            },
             client_rects: KernelClientRectsConfig::default(),
-            media_devices: KernelMediaDevicesConfig::default(),
+            location: KernelLocationConfig::default(),
+            variations: KernelVariationsConfig::default(),
+            battery: KernelBatteryConfig::default(),
+            network_info: KernelNetworkInfoConfig::default(),
+            media_equipment: KernelMediaEquipmentConfig::default(),
+            do_not_track: KernelDoNotTrackConfig {
+                config_type: 2,
+                flag: fp.do_not_track.as_deref() != Some("0"),
+            },
+            open_port: KernelOpenPortConfig::default(),
+            webgpu: KernelWebGpuConfig::default(),
         }
     }
     

@@ -326,6 +326,44 @@ impl KernelDownloader {
             self.kernel_dir.join("linux").join("chrome")
         }
     }
+
+    /// Get bundled kernel path (from resources)
+    /// Returns path to bundled kernel executable if exists
+    pub fn get_bundled_kernel_path() -> Option<PathBuf> {
+        // Get the executable directory
+        let exe_path = std::env::current_exe().ok()?;
+        let exe_dir = exe_path.parent()?;
+        
+        #[cfg(target_os = "windows")]
+        {
+            // In dev mode: resources/kernel/win32/chrome.exe
+            // In production: resources/kernel/win32/chrome.exe (relative to exe)
+            let dev_path = exe_dir
+                .parent()?
+                .parent()?
+                .join("resources")
+                .join("kernel")
+                .join("win32")
+                .join("chrome.exe");
+            
+            if dev_path.exists() {
+                return Some(dev_path);
+            }
+            
+            // Production path (next to executable)
+            let prod_path = exe_dir
+                .join("resources")
+                .join("kernel")
+                .join("win32")
+                .join("chrome.exe");
+            
+            if prod_path.exists() {
+                return Some(prod_path);
+            }
+        }
+        
+        None
+    }
 }
 
 /// 默认内核下载 URL

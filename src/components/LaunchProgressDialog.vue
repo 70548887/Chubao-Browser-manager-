@@ -33,9 +33,8 @@ const canClose = computed(() => {
 })
 
 const handleClose = () => {
-  if (canClose.value) {
-    emit('close')
-  }
+  // 允许随时关闭对话框（启动完成或有错误时自动关闭，否则最小化）
+  emit('close')
 }
 
 const handleCancel = () => {
@@ -65,20 +64,11 @@ const getStepClass = (status: LaunchStep['status']) => {
           <span class="dialog-title">{{ title }}</span>
           <div class="dialog-actions">
             <button 
-              v-if="!canClose" 
-              class="action-btn minimize"
-              title="最小化"
-              @click="handleClose"
-            >
-              <span class="material-symbols-outlined">remove</span>
-            </button>
-            <button 
               class="action-btn close"
-              :disabled="!canClose && progress > 0 && progress < 100"
-              title="关闭"
+              :title="canClose ? '关闭' : '最小化（后台继续启动）'"
               @click="handleClose"
             >
-              <span class="material-symbols-outlined">close</span>
+              <span class="material-symbols-outlined">{{ canClose ? 'close' : 'remove' }}</span>
             </button>
           </div>
         </div>
@@ -184,11 +174,6 @@ const getStepClass = (status: LaunchStep['status']) => {
   &:hover {
     background: #f3f4f6;
     color: #374151;
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
   }
 
   .material-symbols-outlined {

@@ -100,7 +100,7 @@ export interface PreferencesConfig {
 
 /** 指纹配置 */
 export interface FingerprintConfig {
-    seed: number
+    seed: number | string  // 支持字符串类型的 seed
     platform: 'windows' | 'macos' | 'linux' | 'android' | 'ios'
     browser: 'chrome' | 'edge' | 'brave'
     userAgent: string
@@ -111,8 +111,12 @@ export interface FingerprintConfig {
     screenResolution: string
     screenWidth?: number
     screenHeight?: number
+    colorDepth?: number  // 新增：色深
+    availWidth?: number   // 新增：可用宽度
+    availHeight?: number  // 新增：可用高度
     timezone: string
     language: string
+    languages?: string[]  // 新增：语言列表
     canvasNoise: boolean
     webglNoise: boolean
     audioNoise: boolean
@@ -177,12 +181,54 @@ export interface FingerprintConfig {
     fontsList?: string[]
     /** 自定义字体 */
     customFonts?: string
+    /** 字体映射表 */
+    fontMap?: Record<string, any>
+    /** 字体ID映射 */
+    fontIdMap?: Record<string, string>
+    
+    // ClientRects 配置
+    /** ClientRects 噪声 */
+    clientRectsNoise?: {
+        x: number
+        y: number
+        width: number
+        height: number
+    }
     
     // Variations 配置
     /** 启用 Variations */
     variationsEnabled?: boolean
     /** Variations Seed ID */
     variationsSeedId?: string
+    /** Variations 列表 */
+    variationsList?: string[]
+    
+    // 电池信息
+    /** 电池配置 */
+    battery?: {
+        charging: boolean
+        chargingTime: number
+        dischargingTime: number
+        level: number
+    }
+    
+    // 网络信息
+    /** 网络配置 */
+    networkInfo?: {
+        effectiveType: string
+        downlink: number
+        rtt: number
+        saveData: boolean
+    }
+    
+    // 媒体设备
+    /** 媒体设备列表 */
+    mediaEquipmentList?: Array<{
+        deviceId: string
+        kind: string
+        label: string
+        groupId: string
+    }>
     
     /** 地理位置模式: 'auto' | 'custom' | 'disabled' */
     geolocationMode?: string

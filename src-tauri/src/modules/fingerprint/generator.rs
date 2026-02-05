@@ -14,10 +14,20 @@ use crate::modules::config_writer::{
     KernelLanguageConfig,
     KernelWebGLDeviceConfig,
     KernelCanvasConfig,
+    KernelCanvasColoredPoint,
     KernelAudioContextConfig,
     KernelFontConfig,
     KernelClientRectsConfig,
-    KernelMediaDevicesConfig,
+    KernelWebRtcConfig,
+    KernelLocationConfig,
+    KernelVariationsConfig,
+    KernelBatteryConfig,
+    KernelNetworkInfoConfig,
+    KernelMediaEquipmentConfig,
+    KernelDeviceConfig,
+    KernelDoNotTrackConfig,
+    KernelOpenPortConfig,
+    KernelWebGpuConfig,
 };
 use rand::{SeedableRng};
 use rand::rngs::StdRng;
@@ -74,17 +84,81 @@ impl FingerprintGenerator {
         // 根据平台选择一致的时区和语言（保持地理一致性）
         let (timezone, language_primary, language_fallback) = self.get_locale_for_platform(target_platform);
         
+        // 生成完整语言列表
+        let mut languages = vec![language_primary.clone()];
+        // 添加主语言的简写（如 zh-CN -> zh）
+        if let Some(short) = language_primary.split('-').next() {
+            if short != language_primary {
+                languages.push(short.to_string());
+            }
+        }
+        // 添加备用语言
+        languages.extend(language_fallback);
+        
         // 根据平台和版本生成 User-Agent
         let user_agent = self.generate_user_agent(target_platform, target_version, &resolution);
         
         // 5. 生成噪声参数
         let _webgl_noise = WebGLNoiseGenerator::generate(derived_seeds.webgl);
-        let _canvas_noise = CanvasNoiseGenerator::generate_compact(derived_seeds.canvas);
-        let _audio_noise = AudioNoiseGenerator::generate(derived_seeds.audio);
+        let canvas_noise_config = CanvasNoiseGenerator::generate_compact(derived_seeds.canvas);
+        let audio_noise_config = AudioNoiseGenerator::generate(derived_seeds.audio);
+        
+        // 转换 Audio 噪声为 Vec<f64> 格式
+        let audio_noise = vec![
+            audio_noise_config.noise_factor as f64,
+            -audio_noise_config.noise_factor as f64 * 2.0,
+            audio_noise_config.noise_factor as f64,
+            -audio_noise_config.noise_factor as f64,
+            audio_noise_config.noise_factor as f64 * 2.0,
+        ];
+        
+        // 转换 Canvas 噪声为 KernelCanvasColoredPoint 格式
+        let colored_point_list = vec![
+            KernelCanvasColoredPoint {
+                row: 10,
+                column: 10,
+                red: canvas_noise_config.rgb_noise.get(0).copied().unwrap_or(1),
+                green: canvas_noise_config.rgb_noise.get(1).copied().unwrap_or(-1),
+                blue: canvas_noise_config.rgb_noise.get(2).copied().unwrap_or(2),
+                alpha: 0,
+            },
+            KernelCanvasColoredPoint {
+                row: 50,
+                column: 50,
+                red: canvas_noise_config.rgb_noise.get(3).copied().unwrap_or(-2),
+                green: canvas_noise_config.rgb_noise.get(4).copied().unwrap_or(1),
+                blue: canvas_noise_config.rgb_noise.get(5).copied().unwrap_or(-1),
+                alpha: 0,
+            },
+            KernelCanvasColoredPoint {
+                row: 100,
+                column: 100,
+                red: canvas_noise_config.rgb_noise.get(6).copied().unwrap_or(2),
+                green: canvas_noise_config.rgb_noise.get(7).copied().unwrap_or(-2),
+                blue: canvas_noise_config.rgb_noise.get(8).copied().unwrap_or(1),
+                alpha: 0,
+            },
+        ];
         
         // 6. 构建完整配置（匹配内核格式）
         FingerprintFileConfig {
             init: 2,
+            seed: profile_id.to_string(),
+            
+            device: KernelDeviceConfig {
+                config_type: 2,
+                name: format!("DESKTOP-{}", &profile_id[..8].to_uppercase()),
+                mac_address: {
+                    let mac_bytes: Vec<u8> = (0..6)
+                        .map(|i| ((derived_seeds.master >> (i * 8)) & 0xFF) as u8)
+                        .collect();
+                    format!(
+                        "{:02X}-{:02X}-{:02X}-{:02X}-{:02X}-{:02X}",
+                        mac_bytes[0], mac_bytes[1], mac_bytes[2],
+                        mac_bytes[3], mac_bytes[4], mac_bytes[5]
+                    )
+                },
+            },
             
             ua: KernelUaConfig {
                 config_type: 2,
@@ -114,11 +188,7 @@ impl FingerprintGenerator {
             language: KernelLanguageConfig {
                 config_type: 2,
                 interface_language: language_primary.clone(),
-                languages: {
-                    let mut langs = vec![language_primary.clone()];
-                    langs.extend(language_fallback.clone());
-                    langs
-                },
+                languages: languages.clone(),
             },
             
             webgl_device: KernelWebGLDeviceConfig {
@@ -129,26 +199,35 @@ impl FingerprintGenerator {
             
             canvas: KernelCanvasConfig {
                 config_type: 2,
-                noise_enabled: Some(true),
-                noise_factor: Some(0.001),
+                colored_point_list,
             },
             
             audio_context: KernelAudioContextConfig {
                 config_type: 2,
-                noise_enabled: Some(true),
-                noise: None,
+                noise: audio_noise,
             },
             
-            font: KernelFontConfig {
-                config_type: 2,
-                fonts: template.fonts.common_fonts.clone(),
-            },
+            font: KernelFontConfig::default(),
             
-            client_rects: KernelClientRectsConfig {
-                config_type: 2,
-            },
+            webrtc: KernelWebRtcConfig::default(),
             
-            media_devices: KernelMediaDevicesConfig::default(),
+            client_rects: KernelClientRectsConfig::default(),
+            
+            location: KernelLocationConfig::default(),
+            
+            variations: KernelVariationsConfig::default(),
+            
+            battery: KernelBatteryConfig::default(),
+            
+            network_info: KernelNetworkInfoConfig::default(),
+            
+            media_equipment: KernelMediaEquipmentConfig::default(),
+            
+            do_not_track: KernelDoNotTrackConfig::default(),
+            
+            open_port: KernelOpenPortConfig::default(),
+            
+            webgpu: KernelWebGpuConfig::default(),
         }
     }
     

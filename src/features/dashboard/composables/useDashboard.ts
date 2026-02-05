@@ -232,6 +232,13 @@ export function useDashboard(navigateTo?: (page: string) => void) {
   }
 
   const handleDelete = async (id: string) => {
+    // 检查窗口是否在运行中
+    const profile = profileStore.profiles.find(p => p.id === id)
+    if (profile?.status === 'running') {
+      Message.warning('窗口运行中，请先停止后再删除')
+      return
+    }
+    
     try {
       await ElMessageBox.confirm('确定要删除此窗口吗？', '删除确认', {
         type: 'warning',

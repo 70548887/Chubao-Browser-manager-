@@ -18,6 +18,7 @@ use sqlx::Row;
 use sqlx::SqlitePool;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use tracing::info;
 use std::sync::Arc;
 use tauri::{Emitter, Manager, State};
 use tokio::sync::Mutex;
@@ -145,12 +146,42 @@ async fn do_launch_browser(profile_id: String, state: &AppState) -> Result<(), S
         .await
         .map_err(|e| format!("获取启动许可失败: {}", e))?;
 
+    // ✅ Step 1: 检查配置
+    state.browser_manager.emit_progress(
+        profile_id.clone(),
+        "check_config",
+        "检查并同步配置中...",
+        10,
+        false,
+        None,
+    );
+
     let kernel_path = get_setting(&state.pool, "kernel_path")
         .await?
         .unwrap_or_default();
-    if kernel_path.trim().is_empty() {
-        return Err("浏览器内核路径未设置，请先在设置中配置".to_string());
-    }
+    
+    // Try to get kernel path:
+    // 1. From settings (user configured)
+    // 2. From bundled resources (auto-detect)
+    let final_kernel_path = if kernel_path.trim().is_empty() {
+        // Check if bundled kernel exists
+        if let Some(bundled_path) = KernelDownloader::get_bundled_kernel_path() {
+            info!("Using bundled kernel: {:?}", bundled_path);
+            bundled_path.display().to_string()
+        } else {
+            state.browser_manager.emit_progress(
+                profile_id.clone(),
+                "check_config",
+                "浏览器内核路径未设置",
+                10,
+                false,
+                Some("浏览器内核路径未设置，请先在设置中配置或下载内核".to_string()),
+            );
+            return Err("浏览器内核路径未设置，请先在设置中配置或下载内核".to_string());
+        }
+    } else {
+        kernel_path
+    };
 
     let user_data_dir_setting = get_setting(&state.pool, "user_data_dir")
         .await?
@@ -172,23 +203,27 @@ async fn do_launch_browser(profile_id: String, state: &AppState) -> Result<(), S
             .map_err(|e| e.to_string())?
     };
 
-    // ✅ P0: 写入配置文件（bm_fingerprint.json / bm_cloud.json）
-    ConfigWriter::setup_profile_configs(
-        &profile_dir,
-        &profile.id,
-        &profile.name,
-        &profile.group,
-        &profile.fingerprint,
-    )
-    .map_err(|e| {
-        let error_msg = format!("写入配置文件失败: {}", e);
-        state
-            .browser_manager
-            .emit_error(profile_id.clone(), error_msg.clone());
-        error_msg
-    })?;
+    // ✅ Step 1 完成
+    state.browser_manager.emit_progress(
+        profile_id.clone(),
+        "check_config",
+        "配置检查完成",
+        20,
+        true,
+        None,
+    );
 
-    // ✅ 获取 Profile 启用的扩展，生成 --load-extension 参数
+    // ✅ Step 2: 同步扩展
+    state.browser_manager.emit_progress(
+        profile_id.clone(),
+        "sync_extensions",
+        "检查并同步扩展中...",
+        30,
+        false,
+        None,
+    );
+
+    // 获取 Profile 启用的扩展
     let extensions_dir = state.app_data_dir.join("Extensions");
     let load_extension_arg = {
         let extension_service = state.extension_service.lock().await;
@@ -198,7 +233,25 @@ async fn do_launch_browser(profile_id: String, state: &AppState) -> Result<(), S
             .map_err(|e| format!("获取扩展列表失败: {}", e))?
     };
 
-    // ✅ P3: 代理桥接 - 解决带密码 SOCKS5 代理问题
+    state.browser_manager.emit_progress(
+        profile_id.clone(),
+        "sync_extensions",
+        "扩展同步完成",
+        40,
+        true,
+        None,
+    );
+
+    // ✅ Step 3: 获取代理 IP
+    state.browser_manager.emit_progress(
+        profile_id.clone(),
+        "setup_proxy",
+        "开始获取IP...",
+        50,
+        false,
+        None,
+    );
+
     let proxy_arg = if let Some(ref proxy_config) = profile.proxy {
         let proxy_type = match proxy_config.r#type {
             modules::profile::ProxyType::Http => "http",
@@ -206,20 +259,18 @@ async fn do_launch_browser(profile_id: String, state: &AppState) -> Result<(), S
             modules::profile::ProxyType::Socks5 => "socks5",
         };
 
-        // 检查是否需要代理桥接（带密码的 SOCKS5）
         if ProxyBridgeManager::needs_bridge(
             proxy_type,
             &proxy_config.username,
             &proxy_config.password,
         ) {
-            // 启动代理桥接
             let bridge_config = ProxyBridgeConfig {
                 upstream_host: proxy_config.host.clone(),
                 upstream_port: proxy_config.port,
                 upstream_type: proxy_type.to_string(),
                 username: proxy_config.username.clone(),
                 password: proxy_config.password.clone(),
-                enable_udp: true, // 启用 UDP 支持（用于 WebRTC）
+                enable_udp: true,
             };
 
             let local_addr = state
@@ -228,9 +279,14 @@ async fn do_launch_browser(profile_id: String, state: &AppState) -> Result<(), S
                 .await
                 .map_err(|e| {
                     let error_msg = format!("启动代理桥接失败: {}", e);
-                    state
-                        .browser_manager
-                        .emit_error(profile_id.clone(), error_msg.clone());
+                    state.browser_manager.emit_progress(
+                        profile_id.clone(),
+                        "setup_proxy",
+                        "代理设置失败",
+                        50,
+                        false,
+                        Some(error_msg.clone()),
+                    );
                     error_msg
                 })?;
 
@@ -243,7 +299,6 @@ async fn do_launch_browser(profile_id: String, state: &AppState) -> Result<(), S
 
             Some(local_addr)
         } else {
-            // 直接使用原始代理地址
             Some(format!(
                 "{}://{}:{}",
                 proxy_type, proxy_config.host, proxy_config.port
@@ -253,7 +308,84 @@ async fn do_launch_browser(profile_id: String, state: &AppState) -> Result<(), S
         None
     };
 
-    let launcher = BrowserLauncher::new(PathBuf::from(kernel_path));
+    state.browser_manager.emit_progress(
+        profile_id.clone(),
+        "setup_proxy",
+        "代理设置完成",
+        55,
+        true,
+        None,
+    );
+
+    // ✅ Step 4: 同步指纹信息
+    state.browser_manager.emit_progress(
+        profile_id.clone(),
+        "sync_fingerprint",
+        "正在同步指纹信息...",
+        60,
+        false,
+        None,
+    );
+
+    ConfigWriter::setup_profile_configs(
+        &profile_dir,
+        &profile.id,
+        &profile.name,
+        &profile.group,
+        &profile.fingerprint,
+    )
+    .map_err(|e| {
+        let error_msg = format!("写入配置文件失败: {}", e);
+        state.browser_manager.emit_progress(
+            profile_id.clone(),
+            "sync_fingerprint",
+            "指纹同步失败",
+            60,
+            false,
+            Some(error_msg.clone()),
+        );
+        error_msg
+    })?;
+
+    state.browser_manager.emit_progress(
+        profile_id.clone(),
+        "sync_fingerprint",
+        "指纹同步完成",
+        70,
+        true,
+        None,
+    );
+
+    // ✅ Step 5: 同步缓存配置
+    state.browser_manager.emit_progress(
+        profile_id.clone(),
+        "sync_cache",
+        "正在同步缓存配置...",
+        80,
+        false,
+        None,
+    );
+
+    state.browser_manager.emit_progress(
+        profile_id.clone(),
+        "sync_cache",
+        "缓存配置完成",
+        85,
+        true,
+        None,
+    );
+
+    // ✅ Step 6: 打开浏览器窗口
+    state.browser_manager.emit_progress(
+        profile_id.clone(),
+        "launching",
+        "正在打开浏览器窗口...",
+        90,
+        false,
+        None,
+    );
+
+    let launcher = BrowserLauncher::new(PathBuf::from(final_kernel_path));
     let child = launcher
         .launch(
             &profile_id,
@@ -263,9 +395,14 @@ async fn do_launch_browser(profile_id: String, state: &AppState) -> Result<(), S
         )
         .map_err(|e| {
             let error_msg = format!("启动浏览器失败: {}", e);
-            state
-                .browser_manager
-                .emit_error(profile_id.clone(), error_msg.clone());
+            state.browser_manager.emit_progress(
+                profile_id.clone(),
+                "launching",
+                "启动失败",
+                90,
+                false,
+                Some(error_msg.clone()),
+            );
             error_msg
         })?;
 
@@ -283,6 +420,16 @@ async fn do_launch_browser(profile_id: String, state: &AppState) -> Result<(), S
             .await
             .map_err(|e| e.to_string())?;
     }
+
+    // ✅ Step 7: 完成
+    state.browser_manager.emit_progress(
+        profile_id.clone(),
+        "done",
+        "窗口已打开",
+        100,
+        true,
+        None,
+    );
 
     Ok(())
 }
@@ -858,7 +1005,7 @@ async fn batch_restore_profiles(
 async fn permanently_delete_profile(id: String, state: State<'_, AppState>) -> Result<(), String> {
     let service = state.recycle_bin_service.lock().await;
     service
-        .permanently_delete(&id)
+        .permanently_delete(&id, &state.app_data_dir)
         .await
         .map_err(|e| e.to_string())
 }
@@ -871,7 +1018,7 @@ async fn batch_permanently_delete_profiles(
 ) -> Result<modules::BatchResult, String> {
     let service = state.recycle_bin_service.lock().await;
     service
-        .batch_permanently_delete(ids)
+        .batch_permanently_delete(ids, &state.app_data_dir)
         .await
         .map_err(|e| e.to_string())
 }
@@ -880,7 +1027,7 @@ async fn batch_permanently_delete_profiles(
 #[tauri::command]
 async fn empty_recycle_bin(state: State<'_, AppState>) -> Result<u64, String> {
     let service = state.recycle_bin_service.lock().await;
-    service.empty_recycle_bin().await.map_err(|e| e.to_string())
+    service.empty_recycle_bin(&state.app_data_dir).await.map_err(|e| e.to_string())
 }
 
 // ==================== Proxy IPC Commands ====================
@@ -2075,6 +2222,13 @@ async fn get_kernel_path(state: State<'_, AppState>) -> Result<String, String> {
     Ok(downloader.get_kernel_exe_path().display().to_string())
 }
 
+/// Get bundled kernel path (from resources)
+#[tauri::command]
+async fn get_bundled_kernel_path() -> Result<Option<String>, String> {
+    Ok(KernelDownloader::get_bundled_kernel_path()
+        .map(|p| p.display().to_string()))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // 使用新的 Logger 模块初始化日志系统
@@ -2110,7 +2264,7 @@ pub fn run() {
             let profile_service = ProfileService::new(pool.clone());
             let group_service = GroupService::new(pool.clone());
             let tag_service = TagService::new(pool.clone()); // ✅ V5 解锁
-            let recycle_bin_service = RecycleBinService::new(pool.clone()); // ✅ V5 解锁
+            let recycle_bin_service = RecycleBinService::new(pool.clone()); // ✅ V5 解锁 + 缓存删除（动态读取设置）
             let proxy_service = ProxyService::new(pool.clone()); // ✅ V5 升级
             let extension_service = modules::ExtensionService::new(pool.clone());
             let proxy_bridge_manager = Arc::new(ProxyBridgeManager::new());
@@ -2242,6 +2396,7 @@ pub fn run() {
             download_kernel,
             uninstall_kernel,
             get_kernel_path,
+            get_bundled_kernel_path,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

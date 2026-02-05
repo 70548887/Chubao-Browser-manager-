@@ -109,7 +109,11 @@
               选择文件
             </button>
           </div>
-          <p class="setting-hint">
+          <p class="setting-hint" v-if="bundledKernelPath">
+            检测到内嵌内核：{{ bundledKernelPath }}<br/>
+            如未配置将自动使用内嵌内核
+          </p>
+          <p class="setting-hint" v-else>
             例如：C:\Program Files\Google\Chrome\Application\chrome.exe
           </p>
         </div>
@@ -200,6 +204,7 @@ const kernelVersion = ref<KernelVersionInfo | null>(null)
 const isDownloading = ref(false)
 const downloadProgress = ref<DownloadProgress | null>(null)
 const customKernelUrl = ref(kernelApi.DEFAULT_KERNEL_URL)
+const bundledKernelPath = ref<string | null>(null)
 
 // Event unsubscribe functions
 let unlistenProgress: (() => void) | null = null
@@ -231,6 +236,8 @@ const checkKernelStatus = async () => {
     if (kernelInstalled.value) {
       kernelVersion.value = await kernelApi.getKernelVersion()
     }
+    // Check bundled kernel
+    bundledKernelPath.value = await kernelApi.getBundledKernelPath()
   } catch (error) {
     console.error('Failed to check kernel status:', error)
   }

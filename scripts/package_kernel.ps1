@@ -81,8 +81,9 @@ $RequiredFiles = @(
     # MEI (Media Engagement Index)
     "MEIPreload",
     
-    # Manifest
+    # Manifest (version-specific, may not exist)
     "146.0.7652.0.manifest",
+    "139.0.0.0.manifest",
     "chrome.VisualElementsManifest.xml"
 )
 
@@ -130,8 +131,19 @@ Write-Host "`n  Total: $copiedCount files, $([math]::Round($totalSize/1MB, 2)) M
 
 # Create version info
 Write-Host "`n[4/5] Creating version info..." -ForegroundColor Yellow
+# Detect Chromium version from chrome.exe
+$chromeExePath = Join-Path $TempDir "chrome.exe"
+if (Test-Path $chromeExePath) {
+    $chromeVersion = (Get-Item $chromeExePath).VersionInfo.ProductVersion
+    if (-not $chromeVersion) {
+        $chromeVersion = "139.0.0.0"
+    }
+} else {
+    $chromeVersion = "139.0.0.0"
+}
+
 $versionInfo = @{
-    version = "139.0.0.0"
+    version = $chromeVersion
     build_date = (Get-Date -Format "yyyy-MM-dd HH:mm:ss")
     platform = "win64"
     source = "chromium_139_src"

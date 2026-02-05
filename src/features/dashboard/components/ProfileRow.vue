@@ -4,10 +4,10 @@
  * @author DeepAgent
  */
 
+import { computed } from 'vue'
 import type { Profile } from '@/types'
 import { Message } from '@/utils/message'
 import { useGroupStore } from '@/stores/groupStore'
-import { computed } from 'vue'
 
 interface Props {
   profile: Profile
@@ -112,6 +112,9 @@ const getSystemPlatform = (profile: Profile) => {
       return { type: 'windows', label: 'Windows' }
   }
 }
+
+// 检查是否运行中
+const isRunning = computed(() => props.profile.status === 'running')
 
 const handleAction = (action: string) => {
   switch (action) {
@@ -255,7 +258,13 @@ const handleAction = (action: string) => {
       </button>
 
       <!-- 编辑按钮 -->
-      <button class="action-btn" title="编辑" @click="handleAction('edit')">
+      <button 
+        class="action-btn" 
+        :class="{ disabled: isRunning }"
+        :title="isRunning ? '窗口运行中，无法编辑' : '编辑'"
+        :disabled="isRunning"
+        @click="!isRunning && handleAction('edit')"
+      >
         <span class="material-symbols-outlined">edit</span>
       </button>
 
@@ -282,9 +291,13 @@ const handleAction = (action: string) => {
               <span class="material-symbols-outlined menu-icon">cleaning_services</span>
               <span>清空窗口缓存</span>
             </el-dropdown-item>
-            <el-dropdown-item command="delete" class="danger-item">
+            <el-dropdown-item 
+              command="delete" 
+              class="danger-item"
+              :disabled="isRunning"
+            >
               <span class="material-symbols-outlined menu-icon">delete</span>
-              <span>删除窗口</span>
+              <span>{{ isRunning ? '删除窗口（运行中）' : '删除窗口' }}</span>
             </el-dropdown-item>
           </el-dropdown-menu>
         </template>
@@ -553,6 +566,13 @@ const handleAction = (action: string) => {
   &.action-more:hover {
     color: #64748b;
     background: #f1f5f9;
+  }
+
+  &.disabled,
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    pointer-events: none;
   }
 }
 

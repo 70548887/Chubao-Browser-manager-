@@ -94,6 +94,18 @@ export async function getKernelPath(): Promise<string> {
 }
 
 /**
+ * Get bundled kernel path (from resources)
+ */
+export async function getBundledKernelPath(): Promise<string | null> {
+    try {
+        return await invoke<string | null>('get_bundled_kernel_path')
+    } catch (error) {
+        console.error('Failed to get bundled kernel path:', error)
+        return null
+    }
+}
+
+/**
  * Listen to download progress events
  */
 export function onDownloadProgress(callback: (progress: DownloadProgress) => void): Promise<UnlistenFn> {
