@@ -87,6 +87,8 @@ const removeTag = (tagId: string) => {
 }
 
 // 点击外部关闭下拉
+// @ts-ignore
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const closeDropdown = () => {
   showTagDropdown.value = false
 }

@@ -9,7 +9,7 @@ import Step2BasicSettings from './create-window/Step2BasicSettings.vue'
 import Step3FingerprintSettings from './create-window/Step3FingerprintSettings.vue'
 import Step4ProxySettings from './create-window/Step4ProxySettings.vue'
 import Step5Preferences from './create-window/Step5Preferences.vue'
-import { generateRandomFingerprint, type FingerprintConfig, type PlatformType, type BrowserVersionType } from '@/api/fingerprintApi'
+import { generateRandomFingerprint, type PlatformType, type BrowserVersionType } from '@/api/fingerprintApi'
 import { useProfileStore } from '@/stores/profile.store'
 
 interface Props {

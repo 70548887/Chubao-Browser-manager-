@@ -1,6 +1,12 @@
 // API 统一导出
 export * from './profileApi'
-export * from './browserApi'
+export { 
+  launchBrowser,
+  stopBrowser,
+  batchLaunchBrowsers,
+  batchStopBrowsers,
+  arrangeWindowsGrid as browserArrangeWindowsGrid
+} from './browserApi'
 export * from './settingsApi'
 export * from './groupApi'
 export * from './tagApi'
