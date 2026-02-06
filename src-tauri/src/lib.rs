@@ -2229,6 +2229,19 @@ async fn get_bundled_kernel_path() -> Result<Option<String>, String> {
         .map(|p| p.display().to_string()))
 }
 
+/// List all bundled kernel versions
+#[tauri::command]
+async fn list_bundled_kernel_versions() -> Result<Vec<String>, String> {
+    Ok(KernelDownloader::list_bundled_versions())
+}
+
+/// Get bundled kernel path with specific version
+#[tauri::command]
+async fn get_bundled_kernel_path_by_version(version: String) -> Result<Option<String>, String> {
+    Ok(KernelDownloader::get_bundled_kernel_path_with_version(Some(&version))
+        .map(|p| p.display().to_string()))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // 使用新的 Logger 模块初始化日志系统
@@ -2397,6 +2410,8 @@ pub fn run() {
             uninstall_kernel,
             get_kernel_path,
             get_bundled_kernel_path,
+            list_bundled_kernel_versions,
+            get_bundled_kernel_path_by_version,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

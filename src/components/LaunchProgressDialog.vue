@@ -37,6 +37,8 @@ const handleClose = () => {
   emit('close')
 }
 
+// @ts-ignore
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const handleCancel = () => {
   emit('cancel')
 }

@@ -534,7 +534,7 @@ export function useDashboard(navigateTo?: (page: string) => void) {
   }
   
   // 清空窗口缓存
-  const handleClearCache = async (id: string) => {
+  const handleClearCache = async (_id: string) => {
     try {
       // TODO: 调用后端 API 清除缓存
       Message.warning('清空缓存功能开发中...')

@@ -106,6 +106,32 @@ export async function getBundledKernelPath(): Promise<string | null> {
 }
 
 /**
+ * List all bundled kernel versions
+ * @returns Array of version strings (e.g. ['146.0.7652.0', '145.0.0.0'])
+ */
+export async function listBundledKernelVersions(): Promise<string[]> {
+    try {
+        return await invoke<string[]>('list_bundled_kernel_versions')
+    } catch (error) {
+        console.error('Failed to list bundled kernel versions:', error)
+        return []
+    }
+}
+
+/**
+ * Get bundled kernel path for specific version
+ * @param version Version string (e.g. '146.0.7652.0')
+ */
+export async function getBundledKernelPathByVersion(version: string): Promise<string | null> {
+    try {
+        return await invoke<string | null>('get_bundled_kernel_path_by_version', { version })
+    } catch (error) {
+        console.error('Failed to get bundled kernel path by version:', error)
+        return null
+    }
+}
+
+/**
  * Listen to download progress events
  */
 export function onDownloadProgress(callback: (progress: DownloadProgress) => void): Promise<UnlistenFn> {

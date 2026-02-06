@@ -384,6 +384,8 @@ function fingerprintToDto(fp: any): any {
 /**
  * 将前端表单数据转换为浏览器配置文件所需的嵌套结构
  */
+// @ts-ignore
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function formToBrowserConfig(form: any): any {
     if (!form) return null;
     

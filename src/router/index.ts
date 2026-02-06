@@ -40,7 +40,7 @@ const router = createRouter({
 })
 
 // 路由守卫
-router.beforeEach((to, _from, next) => {
+router.beforeEach((_to, _from, next) => {
   // TODO: 后台对接后启用认证检查
   // const isAuthenticated = localStorage.getItem('auth_token')
   // 

@@ -329,40 +329,126 @@ impl KernelDownloader {
 
     /// Get bundled kernel path (from resources)
     /// Returns path to bundled kernel executable if exists
+    /// Supports versioned kernel structure: resources/kernel/win32/{version}/chrome.exe
     pub fn get_bundled_kernel_path() -> Option<PathBuf> {
-        // Get the executable directory
+        Self::get_bundled_kernel_path_with_version(None)
+    }
+
+    /// Get bundled kernel path with specific version
+    /// If version is None, returns the latest version found
+    pub fn get_bundled_kernel_path_with_version(version: Option<&str>) -> Option<PathBuf> {
         let exe_path = std::env::current_exe().ok()?;
         let exe_dir = exe_path.parent()?;
         
         #[cfg(target_os = "windows")]
         {
-            // In dev mode: resources/kernel/win32/chrome.exe
-            // In production: resources/kernel/win32/chrome.exe (relative to exe)
-            let dev_path = exe_dir
-                .parent()?
-                .parent()?
-                .join("resources")
-                .join("kernel")
-                .join("win32")
-                .join("chrome.exe");
-            
-            if dev_path.exists() {
-                return Some(dev_path);
+            // Check dev mode path
+            let dev_base = exe_dir.parent()?.parent()?.join("resources").join("kernel").join("win32");
+            if let Some(path) = Self::find_kernel_in_dir(&dev_base, version) {
+                return Some(path);
             }
             
-            // Production path (next to executable)
-            let prod_path = exe_dir
-                .join("resources")
-                .join("kernel")
-                .join("win32")
-                .join("chrome.exe");
-            
-            if prod_path.exists() {
-                return Some(prod_path);
+            // Check production path
+            let prod_base = exe_dir.join("resources").join("kernel").join("win32");
+            if let Some(path) = Self::find_kernel_in_dir(&prod_base, version) {
+                return Some(path);
             }
         }
         
         None
+    }
+
+    /// Find kernel in directory, supporting versioned subdirectories
+    /// Directory structure: base_dir/{version}/chrome.exe
+    fn find_kernel_in_dir(base_dir: &Path, version: Option<&str>) -> Option<PathBuf> {
+        if !base_dir.exists() {
+            return None;
+        }
+
+        // If specific version requested
+        if let Some(ver) = version {
+            let kernel_path = base_dir.join(ver).join("chrome.exe");
+            if kernel_path.exists() {
+                return Some(kernel_path);
+            }
+            return None;
+        }
+
+        // Find latest version (sort by version number)
+        let mut versions = Vec::new();
+        if let Ok(entries) = std::fs::read_dir(base_dir) {
+            for entry in entries.flatten() {
+                if entry.path().is_dir() {
+                    if let Some(ver_name) = entry.file_name().to_str() {
+                        let kernel_path = entry.path().join("chrome.exe");
+                        if kernel_path.exists() {
+                            versions.push((ver_name.to_string(), kernel_path));
+                        }
+                    }
+                }
+            }
+        }
+
+        if versions.is_empty() {
+            return None;
+        }
+
+        // Sort by version string (descending) and return the latest
+        versions.sort_by(|a, b| b.0.cmp(&a.0));
+        Some(versions[0].1.clone())
+    }
+
+    /// List all bundled kernel versions
+    pub fn list_bundled_versions() -> Vec<String> {
+        let exe_path = std::env::current_exe().ok();
+        if exe_path.is_none() {
+            return Vec::new();
+        }
+        let exe_dir = exe_path.unwrap().parent().map(|p| p.to_path_buf());
+        if exe_dir.is_none() {
+            return Vec::new();
+        }
+        let exe_dir = exe_dir.unwrap();
+        
+        let mut versions = Vec::new();
+        
+        #[cfg(target_os = "windows")]
+        {
+            // Check both dev and production paths
+            let dev_base = exe_dir.parent()
+                .and_then(|p| p.parent())
+                .map(|p| p.join("resources").join("kernel").join("win32"));
+            if let Some(base) = dev_base {
+                if let Ok(entries) = std::fs::read_dir(&base) {
+                    for entry in entries.flatten() {
+                        if entry.path().is_dir() {
+                            if let Some(ver) = entry.file_name().to_str() {
+                                if entry.path().join("chrome.exe").exists() {
+                                    versions.push(ver.to_string());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Also check production path
+            let prod_base = exe_dir.join("resources").join("kernel").join("win32");
+            if let Ok(entries) = std::fs::read_dir(&prod_base) {
+                for entry in entries.flatten() {
+                    if entry.path().is_dir() {
+                        if let Some(ver) = entry.file_name().to_str() {
+                            if entry.path().join("chrome.exe").exists() && !versions.contains(&ver.to_string()) {
+                                versions.push(ver.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        versions.sort_by(|a, b| b.cmp(a)); // Sort descending
+        versions
     }
 }
 
