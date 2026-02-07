@@ -2543,33 +2543,57 @@ pub fn run() {
             let kernel_downloader = Arc::new(Mutex::new(KernelDownloader::new(kernel_base_dir.clone(), kernel_version.clone())));
 
             // 首次运行时自动解压内嵌的内核压缩包
-            let bundled_kernel_zip = app.path().resource_dir()
-                .ok()
-                .and_then(|res_dir| Some(res_dir.join("chromium-146-windows-x64.zip")));
+            // 检查多个可能的路径 (开发模式和生产模式)
+            let possible_paths = vec![
+                // 生产模式: resource_dir()
+                app.path().resource_dir()
+                    .ok()
+                    .map(|res_dir| {
+                        let path = res_dir.join("chromium-146-windows-x64.zip");
+                        tracing::info!("检查生产模式路径: {:?}", path);
+                        path
+                    }),
+                // 开发模式: 项目根目录/resources
+                std::env::current_dir()
+                    .ok()
+                    .map(|cwd| {
+                        let path = cwd.join("resources").join("chromium-146-windows-x64.zip");
+                        tracing::info!("检查开发模式路径: {:?}", path);
+                        path
+                    }),
+            ];
+
+            let bundled_kernel_zip = possible_paths
+                .into_iter()
+                .flatten()
+                .find(|path| {
+                    let exists = path.exists();
+                    let volume_exists = path.with_extension("zip.001").exists();
+                    tracing::info!("路径检查: {:?}, 完整文件存在: {}, 分卷存在: {}", path, exists, volume_exists);
+                    exists || volume_exists
+                });
             
             if let Some(zip_path) = bundled_kernel_zip {
-                if zip_path.exists() {
-                    let downloader = Arc::clone(&kernel_downloader);
-                    let base_dir_clone = kernel_base_dir.clone();
-                    let version_clone = kernel_version.clone();
-                    tauri::async_runtime::spawn(async move {
-                        let downloader = downloader.lock().await;
-                        let result = downloader.extract_bundled_kernel(
-                            &zip_path,
-                            |_progress| {
-                                // 可以在这里发送进度事件到前端
-                            }
-                        ).await;
-                        
-                        match result {
-                            Ok(true) => tracing::info!("内嵌内核已成功解压到: {:?}", base_dir_clone.join(&version_clone)),
-                            Ok(false) => tracing::info!("内核已存在或无需解压"),
-                            Err(e) => tracing::error!("解压内嵌内核失败: {}", e),
+                let downloader = Arc::clone(&kernel_downloader);
+                let base_dir_clone = kernel_base_dir.clone();
+                let version_clone = kernel_version.clone();
+                tauri::async_runtime::spawn(async move {
+                    let downloader = downloader.lock().await;
+                    let result = downloader.extract_bundled_kernel(
+                        &zip_path,
+                        |_progress| {
+                            // 可以在这里发送进度事件到前端
                         }
-                    });
-                } else {
-                    tracing::info!("未找到内嵌的内核压缩包,将使用在线下载模式");
-                }
+                    ).await;
+                    
+                    match result {
+                        Ok(true) => tracing::info!("内嵌内核已成功解压到: {:?}", base_dir_clone.join(&version_clone)),
+                        Ok(false) => tracing::info!("内核已存在或无需解压"),
+                        Err(e) => tracing::error!("解压内嵌内核失败: {}", e),
+                    }
+                });
+            } else {
+                tracing::info!("未找到内嵌的内核压缩包,将使用在线下载模式");
             }
 
             // Create BrowserManager
