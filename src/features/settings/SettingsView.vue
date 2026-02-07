@@ -859,12 +859,8 @@ const handleCheckUpdate = async () => {
   await checkAllUpdates()
 }
 
-// Original settings (for reset)
-const originalSettings = ref({ ...settings.value })
-
-// Loading and saving state
+// Loading state
 const isLoading = ref(false)
-const isSaving = ref(false)
 
 // Kernel download state
 const kernelInstalled = ref(false)
@@ -1069,48 +1065,12 @@ const loadSettings = async () => {
       userDataDir: allSettings.user_data_dir || defaultUserDataDir || '',
       defaultProxy: allSettings.default_proxy || ''
     }
-    originalSettings.value = { ...settings.value }
   } catch (error) {
     console.error('加载设置失败:', error)
     ElMessage.warning('加载设置失败，使用默认值')
   } finally {
     isLoading.value = false
   }
-}
-
-// Save settings
-const handleSave = async () => {
-  if (!isValid.value) {
-    ElMessage.warning('请填写必填项')
-    return
-  }
-
-  isSaving.value = true
-  try {
-    await settingsApi.setSettingValue('kernel_path', settings.value.kernelPath)
-    
-    if (settings.value.userDataDir) {
-      await settingsApi.setSettingValue('user_data_dir', settings.value.userDataDir)
-    }
-    
-    if (settings.value.defaultProxy) {
-      await settingsApi.setSettingValue('default_proxy', settings.value.defaultProxy)
-    }
-
-    originalSettings.value = { ...settings.value }
-    ElMessage.success('设置保存成功')
-  } catch (error) {
-    console.error('保存设置失败:', error)
-    ElMessage.error('保存设置失败：' + error)
-  } finally {
-    isSaving.value = false
-  }
-}
-
-// Reset settings
-const handleReset = () => {
-  settings.value = { ...originalSettings.value }
-  ElMessage.info('已重置为上次保存的设置')
 }
 
 // Initialize

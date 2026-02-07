@@ -1,7 +1,7 @@
 // Kernel Download API
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
-import { ApiEndpoints, buildApiUrl, FALLBACK_KERNEL_URL } from '@/config'
+import { FALLBACK_KERNEL_URL } from '@/config'
 
 // Download progress interface
 export interface DownloadProgress {
@@ -44,7 +44,7 @@ export interface KernelDownloadInfo {
 }
 
 // API 响应接口
-interface ApiResponse<T> {
+export interface ApiResponse<T> {
     code: number
     message: string
     data: T | null
@@ -54,13 +54,11 @@ interface ApiResponse<T> {
  * 获取内核下载信息（通过后端代理请求，安全架构）
  * @param platform 平台：windows / darwin / linux
  * @param arch 架构：x86_64 / aarch64
- * @param launcherVersion 启动器版本
  * @returns 内核下载信息
  */
 export async function getKernelDownloadInfo(
     platform: string = 'windows',
-    arch: string = 'x86_64',
-    launcherVersion: string = '0.3.0'
+    arch: string = 'x86_64'
 ): Promise<KernelDownloadInfo> {
     try {
         // ✅ 通过 IPC 调用后端接口，避免前端暴露 API 地址
