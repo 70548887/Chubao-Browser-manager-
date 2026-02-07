@@ -894,11 +894,6 @@ let unlistenComplete: (() => void) | null = null
 let unlistenError: (() => void) | null = null
 let unlistenExtraction: UnlistenFn | null = null
 
-// Validate settings
-const isValid = computed(() => {
-  return settings.value.kernelPath.trim() !== ''
-})
-
 // Embedded kernel path (alias for bundledKernelPath)
 const embeddedKernelPath = computed(() => bundledKernelPath.value)
 
@@ -936,7 +931,7 @@ const handleDownloadKernel = async () => {
 
   try {
     // 1. 调用后端 API 获取内核下载信息
-    const downloadInfo = await kernelApi.getKernelDownloadInfo('windows', 'x86_64', '0.3.0')
+    const downloadInfo = await kernelApi.getKernelDownloadInfo('windows', 'x86_64')
     
     if (!downloadInfo.has_update) {
       isDownloading.value = false
