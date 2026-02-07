@@ -2578,19 +2578,32 @@ pub fn run() {
                 let downloader = Arc::clone(&kernel_downloader);
                 let base_dir_clone = kernel_base_dir.clone();
                 let version_clone = kernel_version.clone();
+                let app_handle = app.handle().clone();
+                
                 tauri::async_runtime::spawn(async move {
                     let downloader = downloader.lock().await;
                     let result = downloader.extract_bundled_kernel(
                         &zip_path,
-                        |_progress| {
-                            // 可以在这里发送进度事件到前端
+                        move |progress| {
+                            // 发送进度事件到前端
+                            let _ = app_handle.emit("kernel-extraction-progress", &progress);
                         }
                     ).await;
                     
                     match result {
-                        Ok(true) => tracing::info!("内嵌内核已成功解压到: {:?}", base_dir_clone.join(&version_clone)),
-                        Ok(false) => tracing::info!("内核已存在或无需解压"),
-                        Err(e) => tracing::error!("解压内嵌内核失败: {}", e),
+                        Ok(true) => {
+                            tracing::info!("内嵌内核已成功解压到: {:?}", base_dir_clone.join(&version_clone));
+                            // 发送完成事件
+                            let _ = app_handle.emit("kernel-extraction-complete", true);
+                        },
+                        Ok(false) => {
+                            tracing::info!("内核已存在或无需解压");
+                            let _ = app_handle.emit("kernel-extraction-complete", false);
+                        },
+                        Err(e) => {
+                            tracing::error!("解压内嵌内核失败: {}", e);
+                            let _ = app_handle.emit("kernel-extraction-error", e.to_string());
+                        },
                     }
                 });
             } else {
