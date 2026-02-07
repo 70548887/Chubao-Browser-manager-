@@ -661,17 +661,6 @@ const handleDownloadKernel = async () => {
   }
 }
 
-// Use installed kernel
-const useInstalledKernel = async () => {
-  try {
-    const kernelPath = await kernelApi.getKernelPath()
-    settings.value.kernelPath = kernelPath
-    ElMessage.success('已设置为已安装的内核路径')
-  } catch (error) {
-    ElMessage.error('获取内核路径失败')
-  }
-}
-
 // Setup event listeners
 const setupEventListeners = async () => {
   unlistenProgress = await kernelApi.onDownloadProgress((progress) => {
