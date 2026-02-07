@@ -66,25 +66,65 @@ jobs:
           # 创建输出目录
           New-Item -ItemType Directory -Force -Path "release-files" | Out-Null
           
-          # 复制并重命名 MSI
+          # 复制并重命名 MSI (标准版 - 不含内核)
           if (Test-Path "$bundleDir/msi/*.msi") {
             $msi = Get-Item "$bundleDir/msi/*.msi" | Select-Object -First 1
             $newName = "browser-manager_${version}_${arch}.msi"
             Copy-Item $msi.FullName -Destination "release-files/$newName"
           }
           
-          # 复制并重命名 NSIS
+          # 复制并重命名 NSIS (标准版 - 不含内核)
           if (Test-Path "$bundleDir/nsis/*setup.exe") {
             $nsis = Get-Item "$bundleDir/nsis/*setup.exe" | Select-Object -First 1
             $newName = "browser-manager_${version}_${arch}_setup.exe"
             Copy-Item $nsis.FullName -Destination "release-files/$newName"
           }
           
-          # 打包内核
+          # 打包独立内核
           $kernelDir = "resources/kernel/win32"
           if (Test-Path $kernelDir) {
-            $zipName = "kernel_${version}_windows_${arch}.zip"
-            Compress-Archive -Path "$kernelDir/*" -DestinationPath "release-files/$zipName" -Force
+            # 检查是否有实际的内核文件(不只是 .gitkeep)
+            $kernelFiles = Get-ChildItem $kernelDir -Exclude ".gitkeep" -ErrorAction SilentlyContinue
+            if ($kernelFiles.Count -gt 0) {
+              $zipName = "kernel_${version}_windows_${arch}.zip"
+              Compress-Archive -Path "$kernelDir/*" -DestinationPath "release-files/$zipName" -Force
+              Write-Host "✓ 内核已打包: $zipName"
+              
+              # 标记有内核文件
+              echo "HAS_KERNEL=true" >> $env:GITHUB_ENV
+            } else {
+              Write-Host "⚠ 内核目录为空,跳过内核打包"
+              echo "HAS_KERNEL=false" >> $env:GITHUB_ENV
+            }
+          }
+
+      - name: 构建完整版 (仅当有内核时)
+        if: env.HAS_KERNEL == 'true'
+        shell: pwsh
+        run: |
+          $version = "${{ steps.get_version.outputs.VERSION }}"
+          $arch = "${{ matrix.platform.arch }}"
+          $bundleDir = "src-tauri/target/${{ matrix.platform.rust_target }}/release/bundle"
+          
+          Write-Host "开始构建完整版(包含内核)..."
+          
+          # 重新构建 Tauri 应用(这次包含内核)
+          npm run tauri build -- --target ${{ matrix.platform.rust_target }}
+          
+          # 复制并重命名完整版 MSI
+          if (Test-Path "$bundleDir/msi/*.msi") {
+            $msi = Get-Item "$bundleDir/msi/*.msi" | Select-Object -First 1
+            $newName = "browser-manager_${version}_${arch}_full.msi"
+            Copy-Item $msi.FullName -Destination "release-files/$newName"
+            Write-Host "✓ 完整版 MSI: $newName"
+          }
+          
+          # 复制并重命名完整版 NSIS
+          if (Test-Path "$bundleDir/nsis/*setup.exe") {
+            $nsis = Get-Item "$bundleDir/nsis/*setup.exe" | Select-Object -First 1
+            $newName = "browser-manager_${version}_${arch}_full_setup.exe"
+            Copy-Item $nsis.FullName -Destination "release-files/$newName"
+            Write-Host "✓ 完整版 NSIS: $newName"
           }
 
       - name: 上传到 GitHub Release
@@ -97,8 +137,22 @@ jobs:
             
             自动发布的版本，详见更新日志。
             
-            ### 安装包说明
-            - `*_x64.msi` / `*_x64_setup.exe` - 64位 Windows 安装包
-            - `*_x86.msi` / `*_x86_setup.exe` - 32位 Windows 安装包
-            - `kernel_*_windows_*.zip` - 浏览器内核压缩包
+            ### 📦 安装包说明
+            
+            **标准版 (推荐)**
+            - `browser-manager_*_x64.msi` / `*_x64_setup.exe` - 64位启动器(不含内核)
+            - `browser-manager_*_x86.msi` / `*_x86_setup.exe` - 32位启动器(不含内核)
+            - 体积小,首次使用时会提示下载内核
+            
+            **完整版 (可选)**
+            - `browser-manager_*_x64_full.msi` / `*_x64_full_setup.exe` - 64位完整版(含内核)
+            - `browser-manager_*_x86_full.msi` / `*_x86_full_setup.exe` - 32位完整版(含内核)
+            - 体积大,安装后即可使用,无需额外下载
+            
+            **独立内核包**
+            - `kernel_*_windows_*.zip` - 浏览器内核压缩包(手动安装用)
+            
+            ### 💡 使用建议
+            - **网络良好**: 推荐下载标准版,体积小,更新快
+            - **网络受限**: 推荐下载完整版,一次性安装完成
 
