@@ -531,7 +531,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { open as openDialog } from '@tauri-apps/plugin-dialog'
 import * as settingsApi from '@/api/settingsApi'
 import * as kernelApi from '@/api/kernelApi'
@@ -579,9 +579,6 @@ const {
   formatSpeed: formatUpdateSpeed,
 } = useAppUpdate()
 
-// Update dialog
-const showUpdateDialog = ref(false)
-
 // Handle check update
 const handleCheckUpdate = async () => {
   await checkAllUpdates()
@@ -606,19 +603,6 @@ const bundledKernelPath = ref<string | null>(null)
 let unlistenProgress: (() => void) | null = null
 let unlistenComplete: (() => void) | null = null
 let unlistenError: (() => void) | null = null
-
-// Calculate download percentage
-const downloadPercent = computed(() => {
-  if (!downloadProgress.value || !downloadProgress.value.total) return 0
-  return Math.round((downloadProgress.value.downloaded / downloadProgress.value.total) * 100)
-})
-
-// Format download speed
-const formatSpeed = (bytesPerSec: number): string => {
-  if (bytesPerSec < 1024) return `${bytesPerSec} B/s`
-  if (bytesPerSec < 1024 * 1024) return `${(bytesPerSec / 1024).toFixed(1)} KB/s`
-  return `${(bytesPerSec / (1024 * 1024)).toFixed(1)} MB/s`
-}
 
 // Validate settings
 const isValid = computed(() => {
