@@ -1,4 +1,18 @@
 import { invoke } from '@tauri-apps/api/core'
+import { appDataDir } from '@tauri-apps/api/path'
+
+/**
+ * 获取默认用户数据目录
+ */
+export async function getDefaultUserDataDir(): Promise<string> {
+    try {
+        const dataDir = await appDataDir()
+        return dataDir
+    } catch (error) {
+        console.error('Failed to get default user data dir:', error)
+        return ''
+    }
+}
 
 /**
  * 获取单个设置值

@@ -676,3 +676,30 @@ export async function arrangeWindowsGrid(columns: number = 3): Promise<void> {
         throw new Error(`排列窗口失败: ${error}`)
     }
 }
+
+/**
+ * 清空缓存结果类型
+ */
+export interface ClearCacheResult {
+    /** 清理的总大小（字节） */
+    clearedSize: number
+    /** 清理的目录列表 */
+    clearedDirs: string[]
+}
+
+/**
+ * 清空窗口缓存
+ * @param profileId 窗口 ID
+ */
+export async function clearProfileCache(profileId: string): Promise<ClearCacheResult> {
+    try {
+        const result = await invoke<{ cleared_size: number; cleared_dirs: string[] }>('clear_profile_cache', { profileId })
+        return {
+            clearedSize: result.cleared_size,
+            clearedDirs: result.cleared_dirs,
+        }
+    } catch (error) {
+        console.error('Failed to clear profile cache:', error)
+        throw new Error(`清空缓存失败: ${error}`)
+    }
+}

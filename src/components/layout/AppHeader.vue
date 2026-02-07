@@ -50,7 +50,7 @@ const getSearchPlaceholder = () => {
 </script>
 
 <template>
-  <header class="app-header">
+  <header class="app-header" v-if="currentPage !== 'settings'">
     <!-- 左侧：标题区域 -->
     <div class="header-left">
       <h1 class="page-title">

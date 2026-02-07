@@ -922,6 +922,14 @@ impl ProxyBridgeManager {
             .collect()
     }
     
+    /// 停止所有代理桥接
+    pub async fn stop_all(&self) {
+        let mut bridges = self.bridges.lock().await;
+        for (_, bridge) in bridges.drain() {
+            bridge.stop();
+        }
+    }
+    
     /// 检查是否需要桥接（带密码的 SOCKS5）
     pub fn needs_bridge(proxy_type: &str, username: &Option<String>, password: &Option<String>) -> bool {
         proxy_type.to_lowercase() == "socks5" 

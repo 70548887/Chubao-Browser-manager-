@@ -200,8 +200,13 @@ onMounted(async () => {
     
     <!-- 右侧：通知、主题切换和窗口控制 -->
     <div class="titlebar-right">
-      <!-- 发现新版本按钮 -->
-      <button class="titlebar-icon-btn update-btn" title="发现新版本" @click="uiStore.setUpdateDialogVisible(true)">
+      <!-- 发现新版本按钮，只在有更新时显示 -->
+      <button 
+        v-if="uiStore.hasUpdate" 
+        class="titlebar-icon-btn update-btn" 
+        title="发现新版本" 
+        @click="uiStore.setUpdateDialogVisible(true)"
+      >
         <span class="material-symbols-outlined">rocket_launch</span>
         <span class="update-badge"></span>
       </button>

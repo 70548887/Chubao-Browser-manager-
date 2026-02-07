@@ -1,7 +1,7 @@
 {
   "name": "browser-manager",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,7 +10,10 @@
     "tauri": "tauri",
     "test": "vitest",
     "test:ui": "vitest --ui",
-    "test:coverage": "vitest --coverage"
+    "test:coverage": "vitest --coverage",
+    "release": "powershell -ExecutionPolicy Bypass -File ./scripts/build-release.ps1",
+    "release:version": "powershell -ExecutionPolicy Bypass -File ./scripts/build-release.ps1 -Version",
+    "release:github": "powershell -ExecutionPolicy Bypass -File ./scripts/release-to-github.ps1"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",

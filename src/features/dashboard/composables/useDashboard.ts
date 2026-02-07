@@ -12,7 +12,7 @@ import type { BatchResult } from '@/types'
 import { ElMessageBox } from 'element-plus'
 import { Message } from '@/utils/message'
 import { getSettingValue } from '@/api/settingsApi'
-import { arrangeWindowsGrid } from '@/api/profileApi'
+import { arrangeWindowsGrid, clearProfileCache } from '@/api/profileApi'
 
 export function useDashboard(navigateTo?: (page: string) => void) {
   // ==================== Stores ====================
@@ -534,12 +534,51 @@ export function useDashboard(navigateTo?: (page: string) => void) {
   }
   
   // 清空窗口缓存
-  const handleClearCache = async (_id: string) => {
+  const handleClearCache = async (id: string) => {
     try {
-      // TODO: 调用后端 API 清除缓存
-      Message.warning('清空缓存功能开发中...')
+      // 先确认
+      const profile = profiles.value.find(p => p.id === id)
+      if (!profile) {
+        Message.error('窗口不存在')
+        return
+      }
+      
+      // 检查窗口是否在运行
+      if (profile.status === 'running') {
+        Message.warning('窗口正在运行中，请先停止后再清空缓存')
+        return
+      }
+      
+      await ElMessageBox.confirm(
+        `确定要清空窗口 "${profile.name}" 的缓存吗？这将删除该窗口的浏览器缓存、LocalStorage、IndexedDB 等数据。`,
+        '清空缓存确认',
+        {
+          type: 'warning',
+          confirmButtonText: '确定清空',
+          cancelButtonText: '取消',
+        }
+      )
+      
+      const result = await clearProfileCache(id)
+      
+      // 格式化大小显示
+      const formatSize = (bytes: number) => {
+        if (bytes === 0) return '0 B'
+        const k = 1024
+        const sizes = ['B', 'KB', 'MB', 'GB']
+        const i = Math.floor(Math.log(bytes) / Math.log(k))
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+      }
+      
+      if (result.clearedDirs.length > 0) {
+        Message.success(`缓存清空成功，共释放 ${formatSize(result.clearedSize)}`)
+      } else {
+        Message.info('没有需要清理的缓存')
+      }
     } catch (e: any) {
-      Message.error(e.message || '清空缓存失败')
+      if (e !== 'cancel') {
+        Message.error(e.message || '清空缓存失败')
+      }
     }
   }
 

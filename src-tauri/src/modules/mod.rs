@@ -16,6 +16,7 @@ pub mod config_writer;  // Config file generation
 pub mod fingerprint;  // Fingerprint generation
 pub mod extension;  // Extension management
 pub mod kernel_downloader;  // Kernel download and management
+pub mod app_updater;  // 应用自动更新
 
 pub use profile::ProfileService;
 pub use browser::BrowserLauncher;
@@ -33,3 +34,4 @@ pub use fingerprint::FingerprintGenerator;  // ✅ 导出指纹生成器
 pub use extension::{ExtensionService, Extension, CreateExtensionDto, UpdateExtensionDto};  // ✅ 扩展管理
 pub use proxy_bridge::{ProxyBridge, ProxyBridgeConfig, ProxyBridgeManager, BridgeStats};
 pub use kernel_downloader::{KernelDownloader, DownloadProgress, DownloadStatus, KernelVersionInfo};
+pub use app_updater::{UpdateInfo, UpdateDownloadProgress, UpdateDownloadStatus, DownloadSource, UpdateComponent};

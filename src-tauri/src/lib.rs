@@ -13,11 +13,12 @@ use modules::{
     BridgeStats, BrowserLauncher, BrowserManager, ConfigWriter, DownloadProgress, DownloadStatus,
     GroupService, KernelDownloader, KernelVersionInfo, ProfileService, ProxyBridgeConfig,
     ProxyBridgeManager, ProxyService, RecycleBinService, RecycledProfile, TagService,
+    UpdateInfo, UpdateDownloadProgress,
 };
 use sqlx::Row;
 use sqlx::SqlitePool;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tracing::info;
 use std::sync::Arc;
 use tauri::{Emitter, Manager, State};
@@ -657,6 +658,99 @@ async fn batch_stop_browsers(
     }
 
     Ok(modules::BatchResult::from_results(results))
+}
+
+/// 清空窗口缓存
+/// 删除指定 Profile 的浏览器缓存目录（Cache, Code Cache, GPUCache 等）
+#[tauri::command]
+async fn clear_profile_cache(
+    profile_id: String,
+    state: State<'_, AppState>,
+) -> Result<ClearCacheResult, String> {
+    // 检查窗口是否在运行
+    if state.browser_manager.is_running(&profile_id).await {
+        return Err("窗口正在运行中，请先停止后再清空缓存".to_string());
+    }
+
+    // 获取用户数据目录
+    let user_data_dir_setting = get_setting(&state.pool, "user_data_dir")
+        .await?
+        .unwrap_or_default();
+    let base_user_data_dir = if user_data_dir_setting.trim().is_empty() {
+        state.app_data_dir.clone()
+    } else {
+        PathBuf::from(user_data_dir_setting)
+    };
+
+    let profile_dir = profile_user_data_dir(&base_user_data_dir, &profile_id);
+    
+    if !profile_dir.exists() {
+        return Ok(ClearCacheResult {
+            cleared_size: 0,
+            cleared_dirs: vec![],
+        });
+    }
+
+    // 需要清理的缓存目录列表
+    let cache_dirs = [
+        "Cache",
+        "Code Cache",
+        "GPUCache",
+        "Service Worker",
+        "IndexedDB",
+        "Local Storage",
+        "Session Storage",
+    ];
+
+    let mut cleared_size = 0u64;
+    let mut cleared_dirs = Vec::new();
+
+    for dir_name in &cache_dirs {
+        let cache_path = profile_dir.join(dir_name);
+        if cache_path.exists() {
+            // 计算目录大小
+            let size = calculate_dir_size(&cache_path);
+            
+            // 删除目录
+            if let Err(e) = std::fs::remove_dir_all(&cache_path) {
+                tracing::warn!("清理缓存目录失败 {}: {}", dir_name, e);
+            } else {
+                cleared_size += size;
+                cleared_dirs.push(dir_name.to_string());
+                tracing::info!("已清理缓存: {} ({} bytes)", dir_name, size);
+            }
+        }
+    }
+
+    Ok(ClearCacheResult {
+        cleared_size,
+        cleared_dirs,
+    })
+}
+
+/// 计算目录大小
+fn calculate_dir_size(path: &Path) -> u64 {
+    let mut size = 0;
+    if let Ok(entries) = std::fs::read_dir(path) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                size += calculate_dir_size(&path);
+            } else if let Ok(metadata) = entry.metadata() {
+                size += metadata.len();
+            }
+        }
+    }
+    size
+}
+
+/// 清空缓存的返回结果
+#[derive(serde::Serialize)]
+struct ClearCacheResult {
+    /// 清理的总大小（字节）
+    cleared_size: u64,
+    /// 清理的目录列表
+    cleared_dirs: Vec<String>,
 }
 
 /// 批量移动环境到指定分组
@@ -2242,6 +2336,167 @@ async fn get_bundled_kernel_path_by_version(version: String) -> Result<Option<St
         .map(|p| p.display().to_string()))
 }
 
+// ==================== 更新相关 Commands ====================
+
+/// 检查启动器更新
+#[tauri::command]
+async fn check_app_update(
+    state: State<'_, AppState>,
+) -> Result<UpdateInfo, String> {
+    let server = get_setting(&state.pool, "update_server_url")
+        .await?
+        .unwrap_or_else(|| modules::app_updater::DEFAULT_UPDATE_SERVER.to_string());
+
+    let current_version = env!("CARGO_PKG_VERSION");
+    
+    // 检测系统架构
+    let arch = if cfg!(target_pointer_width = "64") {
+        "x86_64"
+    } else {
+        "x86"
+    };
+
+    modules::app_updater::check_launcher_update(
+        &server, current_version, "windows", arch,
+    )
+    .await
+    .map_err(|e| e.to_string())
+}
+
+/// 检查内核更新
+#[tauri::command]
+async fn check_kernel_update_api(
+    state: State<'_, AppState>,
+) -> Result<UpdateInfo, String> {
+    let server = get_setting(&state.pool, "update_server_url")
+        .await?
+        .unwrap_or_else(|| modules::app_updater::DEFAULT_UPDATE_SERVER.to_string());
+
+    let kernel_version = {
+        let downloader = state.kernel_downloader.lock().await;
+        downloader.get_installed_version()
+            .map(|v| v.version)
+            .unwrap_or_else(|| "0.0.0".to_string())
+    };
+
+    let launcher_version = env!("CARGO_PKG_VERSION");
+    
+    // 检测系统架构
+    let arch = if cfg!(target_pointer_width = "64") {
+        "x86_64"
+    } else {
+        "x86"
+    };
+
+    modules::app_updater::check_kernel_update(
+        &server, &kernel_version, "windows", arch, launcher_version,
+    )
+    .await
+    .map_err(|e| e.to_string())
+}
+
+/// 下载启动器更新
+#[tauri::command]
+async fn download_app_update(
+    app: tauri::AppHandle,
+    url: String,
+    file_hash: String,
+) -> Result<String, String> {
+    let temp_dir = modules::app_updater::get_update_temp_dir();
+
+    let app_clone = app.clone();
+    let dest = modules::app_updater::download_and_verify(
+        &url,
+        &file_hash,
+        &temp_dir,
+        modules::app_updater::UpdateComponent::Launcher,
+        move |progress| {
+            let _ = app_clone.emit("update:download-progress", &progress);
+        },
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+
+    Ok(dest.display().to_string())
+}
+
+/// 下载内核更新
+#[tauri::command]
+async fn download_kernel_update(
+    app: tauri::AppHandle,
+    url: String,
+    file_hash: String,
+) -> Result<String, String> {
+    let temp_dir = modules::app_updater::get_update_temp_dir();
+
+    let app_clone = app.clone();
+    let dest = modules::app_updater::download_and_verify(
+        &url,
+        &file_hash,
+        &temp_dir,
+        modules::app_updater::UpdateComponent::Kernel,
+        move |progress| {
+            let _ = app_clone.emit("update:download-progress", &progress);
+        },
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+
+    Ok(dest.display().to_string())
+}
+
+/// 安装启动器更新（优雅关闭 → 启动安装器 → 重启）
+#[tauri::command]
+async fn install_app_update(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    file_path: String,
+) -> Result<(), String> {
+    let path = std::path::PathBuf::from(&file_path);
+    modules::app_updater::install_launcher_update(
+        &path,
+        &state.browser_manager,
+        &state.proxy_bridge_manager,
+        &app,
+    )
+    .await
+    .map_err(|e| e.to_string())
+}
+
+/// 安装内核更新（需要先关闭所有浏览器）
+#[tauri::command]
+async fn install_kernel_update_cmd(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    file_path: String,
+    new_version: String,
+) -> Result<(), String> {
+    let zip_path = std::path::PathBuf::from(&file_path);
+    let kernel_dir = state.app_data_dir.join("kernel").join("win32");
+
+    let app_clone = app.clone();
+    modules::app_updater::install_kernel_update(
+        &zip_path,
+        &kernel_dir,
+        &new_version,
+        &state.browser_manager,
+        move |progress| {
+            let _ = app_clone.emit("update:download-progress", &progress);
+        },
+    )
+    .await
+    .map_err(|e| e.to_string())
+}
+
+/// 获取运行中的浏览器数量（前端在安装更新前调用检查）
+#[tauri::command]
+async fn get_running_browser_count(
+    state: State<'_, AppState>,
+) -> Result<usize, String> {
+    let running = state.browser_manager.get_running_profiles().await;
+    Ok(running.len())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // 使用新的 Logger 模块初始化日志系统
@@ -2364,8 +2619,8 @@ pub fn run() {
             batch_launch_browsers,
             batch_stop_browsers,
             batch_move_to_group,
-            batch_duplicate_profiles,
             batch_delete_profiles,
+            clear_profile_cache,
             // Window commands
             arrange_windows_grid,
             arrange_windows_advanced,
@@ -2412,6 +2667,14 @@ pub fn run() {
             get_bundled_kernel_path,
             list_bundled_kernel_versions,
             get_bundled_kernel_path_by_version,
+            // App update commands - 应用自动更新
+            check_app_update,
+            check_kernel_update_api,
+            download_app_update,
+            download_kernel_update,
+            install_app_update,
+            install_kernel_update_cmd,
+            get_running_browser_count,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

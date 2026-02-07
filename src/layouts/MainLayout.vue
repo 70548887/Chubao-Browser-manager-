@@ -3,17 +3,47 @@ import { ref, onMounted } from 'vue'
 import CustomTitlebar from '@/components/layout/CustomTitlebar.vue'
 import AppSidebar from '@/components/layout/AppSidebar.vue'
 import AppHeader from '@/components/layout/AppHeader.vue'
+import { useUIStore } from '@/stores/ui.store'
+import * as updateApi from '@/api/updateApi'
 
 defineEmits(['create-new'])
 
+const uiStore = useUIStore()
 const sidebarCollapsed = ref(false)
 
 const toggleSidebar = () => {
   sidebarCollapsed.value = !sidebarCollapsed.value
 }
 
+// 启动时静默检查更新
+const checkUpdateOnStartup = async () => {
+  try {
+    uiStore.setCheckingUpdate(true)
+    
+    const [launcher, kernel] = await Promise.allSettled([
+      updateApi.checkAppUpdate(),
+      updateApi.checkKernelUpdate(),
+    ])
+
+    if (launcher.status === 'fulfilled') {
+      uiStore.setLauncherUpdate(launcher.value)
+    }
+    
+    if (kernel.status === 'fulfilled') {
+      uiStore.setKernelUpdate(kernel.value)
+    }
+  } catch (error) {
+    console.error('启动时检查更新失败:', error)
+  } finally {
+    uiStore.setCheckingUpdate(false)
+  }
+}
+
 onMounted(() => {
-  // 基础初始化
+  // 延迟 2 秒检查更新，避免影响启动速度
+  setTimeout(() => {
+    checkUpdateOnStartup()
+  }, 2000)
 })
 </script>
 

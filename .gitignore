@@ -33,3 +33,7 @@ src-tauri/resources/kernel/win32/*
 src-tauri/resources/kernel/darwin/*
 src-tauri/resources/kernel/linux/*
 !src-tauri/resources/kernel/*/.gitkeep
+
+# Release artifacts
+release/
+src-tauri/target/
