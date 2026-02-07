@@ -7,13 +7,7 @@
           <h1 class="header-title">全局设置</h1>
           <span class="header-badge">专业版</span>
         </div>
-        <p class="header-desc">配置应用程序全局偏好设置和安全默认项。</p>
-      </div>
-      <div class="header-right">
-        <button class="btn-discard" @click="handleReset">丢弃</button>
-        <button class="btn-save" @click="handleSave" :disabled="!isValid || isSaving">
-          {{ isSaving ? '保存中...' : '保存更改' }}
-        </button>
+        <p class="header-desc">配置应用程序全局偏好设置和安全默认项。所有设置修改后自动保存。</p>
       </div>
     </header>
 
@@ -348,38 +342,50 @@
               <span class="material-symbols-outlined">warning</span>
               <div class="warning-content">
                 <p class="warning-title">内核未安装</p>
-                <p class="warning-desc">请下载或选择内核文件</p>
+                <p class="warning-desc">请点击下方按钮下载内核</p>
               </div>
             </div>
 
             <!-- 下载内核区域 -->
-            <div class="kernel-download">
+            <div v-if="!kernelInstalled" class="kernel-download">
               <div class="download-header">
                 <span class="material-symbols-outlined">download</span>
                 <span class="download-title">下载内核</span>
               </div>
-              <div class="form-group">
-                <label class="form-label">内核下载地址</label>
-                <div class="input-with-btn">
-                  <input
-                    v-model="customKernelUrl"
-                    type="text"
-                    class="form-input"
-                    placeholder="https://github.com/..."
-                  />
-                  <button class="icon-btn" @click="resetKernelUrl" title="重置">
-                    <span class="material-symbols-outlined">refresh</span>
-                  </button>
-                </div>
-              </div>
               <div class="info-box">
                 <span class="material-symbols-outlined">info</span>
-                <p>默认从 GitHub Releases 下载，如下载缓慢可使用镜像地址</p>
+                <p>内核将从官方服务器自动下载，下载完成后自动安装配置。</p>
               </div>
               <button class="download-btn" @click="handleDownloadKernel" :disabled="isDownloading">
-                <span class="material-symbols-outlined">download</span>
-                {{ isDownloading ? '下载中...' : '开始下载' }}
+                <span class="material-symbols-outlined">{{ isDownloading ? 'sync' : 'download' }}</span>
+                {{ isDownloading ? '下载中...' : '下载 Chromium 内核' }}
               </button>
+              
+              <!-- 下载进度 -->
+              <div v-if="isDownloading && downloadProgress" class="download-progress-section mt-4">
+                <div class="progress-header">
+                  <span class="progress-label">{{ downloadProgress.message }}</span>
+                  <span class="progress-speed">{{ formatDownloadSpeed(downloadProgress.speed) }}</span>
+                </div>
+                <div class="progress-bar-container">
+                  <div class="progress-bar" :style="{ width: getDownloadPercent() + '%' }"></div>
+                </div>
+                <div class="progress-footer">
+                  <span>{{ formatBytes(downloadProgress.downloaded) }} / {{ formatBytes(downloadProgress.total || 0) }}</span>
+                  <span>{{ getDownloadPercent() }}%</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 内核已安装状态 -->
+            <div v-else class="kernel-installed">
+              <div class="installed-header">
+                <span class="material-symbols-outlined installed-icon">check_circle</span>
+                <div class="installed-info">
+                  <p class="installed-title">内核已安装</p>
+                  <p class="installed-version">Chromium {{ kernelVersionDisplay }}</p>
+                </div>
+              </div>
             </div>
 
             <!-- 内核路径 -->
@@ -418,6 +424,13 @@
                 </button>
               </div>
               <p class="form-hint">用于存储浏览器配置文件和用户数据，留空则使用默认目录</p>
+              <div class="info-box mt-2">
+                <span class="material-symbols-outlined">tips_and_updates</span>
+                <div>
+                  <p><strong>建议：</strong>多开窗口会产生大量缓存数据，建议配置到 D 盘或其他非系统盘</p>
+                  <p class="mt-1">示例：<code>D:\QutabBrowser-Cache</code>。如只有一个磁盘分区，可使用默认目录。</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -523,6 +536,105 @@
             </div>
           </div>
         </div>
+
+        <!-- 关于我们 -->
+        <div v-show="currentSection === 'about'" class="space-y-6">
+          <div class="settings-card about-card">
+            <div class="about-header">
+              <div class="about-logo">
+                <span class="material-symbols-outlined">fingerprint</span>
+              </div>
+              <div class="about-info">
+                <h2 class="about-name">触宝指纹浏览器</h2>
+                <p class="about-tagline">专业的多账号浏览器管理工具</p>
+              </div>
+            </div>
+
+            <div class="about-version-grid">
+              <div class="version-item">
+                <span class="version-label">软件版本</span>
+                <span class="version-value">v{{ appVersion }}</span>
+              </div>
+              <div class="version-item">
+                <span class="version-label">内核版本</span>
+                <span class="version-value">Chromium {{ kernelVersionDisplay }}</span>
+              </div>
+              <div class="version-item">
+                <span class="version-label">构建时间</span>
+                <span class="version-value">{{ buildDate }}</span>
+              </div>
+              <div class="version-item">
+                <span class="version-label">运行平台</span>
+                <span class="version-value">{{ platform }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-card">
+            <h2 class="card-title">
+              <span class="title-indicator"></span>
+              产品特性
+            </h2>
+            
+            <div class="feature-list">
+              <div class="feature-item">
+                <span class="material-symbols-outlined feature-icon">fingerprint</span>
+                <div class="feature-content">
+                  <p class="feature-title">独立指纹环境</p>
+                  <p class="feature-desc">每个浏览器配置文件拥有独立的指纹标识，有效防止账号关联</p>
+                </div>
+              </div>
+              <div class="feature-item">
+                <span class="material-symbols-outlined feature-icon">tab_group</span>
+                <div class="feature-content">
+                  <p class="feature-title">批量多开管理</p>
+                  <p class="feature-desc">支持同时打开多个浏览器窗口，高效管理多账号</p>
+                </div>
+              </div>
+              <div class="feature-item">
+                <span class="material-symbols-outlined feature-icon">vpn_key</span>
+                <div class="feature-content">
+                  <p class="feature-title">代理一键配置</p>
+                  <p class="feature-desc">每个窗口可单独配置代理，支持 HTTP/SOCKS5 协议</p>
+                </div>
+              </div>
+              <div class="feature-item">
+                <span class="material-symbols-outlined feature-icon">speed</span>
+                <div class="feature-content">
+                  <p class="feature-title">高性能架构</p>
+                  <p class="feature-desc">基于 Tauri 2.0 + Rust 构建，内存占用低，启动速度快</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-card">
+            <h2 class="card-title">
+              <span class="title-indicator"></span>
+              联系我们
+            </h2>
+            
+            <div class="contact-list">
+              <div class="contact-item">
+                <span class="material-symbols-outlined">language</span>
+                <span>官方网站：</span>
+                <a href="https://github.com" target="_blank" class="contact-link">https://qutab.cn</a>
+              </div>
+              <div class="contact-item">
+                <span class="material-symbols-outlined">mail</span>
+                <span>技术支持：</span>
+                <a href="mailto:support@qutab.cn" class="contact-link">support@qutab.cn</a>
+              </div>
+              <div class="contact-item">
+                <span class="material-symbols-outlined">code</span>
+                <span>开源地址：</span>
+                <a href="https://github.com" target="_blank" class="contact-link">GitHub</a>
+              </div>
+            </div>
+
+            <p class="about-copyright">© 2024-2026 触宝科技 版权所有</p>
+          </div>
+        </div>
       </div>
       </div>
     </div>
@@ -530,13 +642,27 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { open as openDialog } from '@tauri-apps/plugin-dialog'
+import { enable, disable, isEnabled } from '@tauri-apps/plugin-autostart'
+import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import * as settingsApi from '@/api/settingsApi'
 import * as kernelApi from '@/api/kernelApi'
 import type { DownloadProgress, KernelVersionInfo } from '@/api/kernelApi'
 import { useAppUpdate } from './useAppUpdate'
+import { useTheme } from '@/composables/useTheme'
+import type { ThemeMode } from '@/config'
+import { setLocale, getLocale, type SupportedLocale } from '@/locales'
+
+// Theme management
+const { theme, setTheme } = useTheme()
+
+// About page info
+const appVersion = ref('0.3.0')
+const kernelVersionDisplay = computed(() => kernelVersion.value?.version || '146')
+const buildDate = ref('2026-02-07')
+const platform = ref('Windows x64')
 
 // Navigation sections
 const sections = [
@@ -546,7 +672,8 @@ const sections = [
   { id: 'shortcuts', label: '快捷键绑定', icon: 'keyboard' },
   { id: 'security', label: '安全与隐私', icon: 'security' },
   { id: 'sync', label: '云端同步', icon: 'cloud_sync' },
-  { id: 'reset', label: '恢复默认设置', icon: 'restart_alt' }
+  { id: 'reset', label: '恢复默认设置', icon: 'restart_alt' },
+  { id: 'about', label: '关于我们', icon: 'info' }
 ]
 
 const currentSection = ref('basic')
@@ -558,12 +685,160 @@ const settings = ref({
   defaultProxy: ''
 })
 
-// Basic settings
-const themeMode = ref('system')
-const language = ref('zh-CN')
-const autoStart = ref(true)
+// Basic settings - 从当前主题状态初始化
+const themeMode = ref<ThemeMode | 'system'>(theme.value)
+const language = ref<SupportedLocale>(getLocale())
+const autoStart = ref(false)
 const restoreSession = ref(false)
 const autoUpdate = ref(true)
+
+// 监听语言变化
+watch(language, (newLocale) => {
+  setLocale(newLocale)
+  ElMessage.success('语言已切换，部分内容将在刷新后生效')
+})
+
+// 监听自启动变化
+watch(autoStart, async (enabled) => {
+  try {
+    if (enabled) {
+      await enable()
+      ElMessage.success('已开启开机自启动')
+    } else {
+      await disable()
+      ElMessage.info('已关闭开机自启动')
+    }
+  } catch (error) {
+    console.error('Failed to change autostart:', error)
+    ElMessage.error('设置自启动失败')
+    // 回滚状态
+    autoStart.value = !enabled
+  }
+})
+
+// ==================== 内核设置即时保存 ====================
+// 防抖定时器
+let saveSettingsTimer: ReturnType<typeof setTimeout> | null = null
+// 标记：是否是加载设置时的初始化（避免初始化时触发保存）
+let isInitialLoad = true
+
+// 内核设置变化时即时保存（防抖 500ms）
+watch(() => settings.value.kernelPath, async (newPath, oldPath) => {
+  // 跳过初始加载的第一次赋值（从数据库加载时）
+  if (isInitialLoad && oldPath === '') {
+    isInitialLoad = false
+    // 但如果是自动检测到内核路径（checkKernelStatus 自动填充），则保存
+    if (newPath) {
+      console.log('检测到内核路径自动填充，准备保存:', newPath)
+      // 不 return，继续执行下面的保存逻辑
+    } else {
+      return
+    }
+  }
+  
+  if (newPath === oldPath) return
+  
+  if (saveSettingsTimer) clearTimeout(saveSettingsTimer)
+  saveSettingsTimer = setTimeout(async () => {
+    try {
+      await settingsApi.setSettingValue('kernel_path', newPath)
+      console.log('内核路径已保存:', newPath)
+    } catch (error) {
+      console.error('保存内核路径失败:', error)
+    }
+  }, 500)
+})
+
+watch(() => settings.value.userDataDir, async (newDir, oldDir) => {
+  if (!oldDir && newDir) return
+  if (newDir === oldDir) return
+  
+  if (saveSettingsTimer) clearTimeout(saveSettingsTimer)
+  saveSettingsTimer = setTimeout(async () => {
+    try {
+      await settingsApi.setSettingValue('user_data_dir', newDir)
+      console.log('用户数据目录已保存:', newDir)
+    } catch (error) {
+      console.error('保存用户数据目录失败:', error)
+    }
+  }, 500)
+})
+
+watch(() => settings.value.defaultProxy, async (newProxy, oldProxy) => {
+  if (newProxy === oldProxy) return
+  
+  if (saveSettingsTimer) clearTimeout(saveSettingsTimer)
+  saveSettingsTimer = setTimeout(async () => {
+    try {
+      await settingsApi.setSettingValue('default_proxy', newProxy)
+      console.log('默认代理已保存:', newProxy)
+    } catch (error) {
+      console.error('保存默认代理失败:', error)
+    }
+  }, 500)
+})
+
+// 监听系统主题变化 (用于 system 模式)
+let systemThemeMediaQuery: MediaQueryList | null = null
+
+// 获取系统主题
+const getSystemTheme = (): ThemeMode => {
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+}
+
+// 应用主题
+const applyThemeMode = (mode: ThemeMode | 'system') => {
+  if (mode === 'system') {
+    setTheme(getSystemTheme())
+  } else {
+    setTheme(mode)
+  }
+}
+
+// 防止循环更新的标志
+let isUpdatingFromGlobal = false
+
+// 监听主题模式变化（设置页面内的选择）
+watch(themeMode, (newMode) => {
+  if (isUpdatingFromGlobal) return
+  applyThemeMode(newMode)
+  // 保存用户选择到 localStorage
+  localStorage.setItem('theme-mode', newMode)
+}, { immediate: false })
+
+// 监听全局主题变化（同步标题栏切换）
+watch(theme, (newTheme) => {
+  // 防止循环：设置页面修改 -> theme 变化 -> 触发此 watch -> themeMode 变化 -> 触发上面的 watch
+  isUpdatingFromGlobal = true
+  // 标题栏切换时，同步更新设置页面的选择
+  themeMode.value = newTheme
+  localStorage.setItem('theme-mode', newTheme)
+  // 异步重置标志，确保本轮 watch 执行完毕
+  setTimeout(() => {
+    isUpdatingFromGlobal = false
+  }, 0)
+})
+
+// 初始化主题模式
+const initThemeMode = () => {
+  // 优先使用全局主题状态（theme 是最新的）
+  themeMode.value = theme.value
+  
+  // 如果 localStorage 有 'system' 选项，则使用
+  const savedMode = localStorage.getItem('theme-mode') as ThemeMode | 'system' | null
+  if (savedMode === 'system') {
+    themeMode.value = 'system'
+    applyThemeMode('system')
+  }
+  
+  // 监听系统主题变化
+  systemThemeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+  systemThemeMediaQuery.addEventListener('change', () => {
+    if (themeMode.value === 'system') {
+      setTheme(getSystemTheme())
+    }
+  })
+}
 
 // App update
 const {
@@ -596,13 +871,32 @@ const kernelInstalled = ref(false)
 const kernelVersion = ref<KernelVersionInfo | null>(null)
 const isDownloading = ref(false)
 const downloadProgress = ref<DownloadProgress | null>(null)
-const customKernelUrl = ref(kernelApi.DEFAULT_KERNEL_URL)
 const bundledKernelPath = ref<string | null>(null)
+
+// 下载进度辅助函数
+const formatDownloadSpeed = (speed: number): string => {
+  if (speed < 1024) return `${speed.toFixed(0)} B/s`
+  if (speed < 1024 * 1024) return `${(speed / 1024).toFixed(1)} KB/s`
+  return `${(speed / 1024 / 1024).toFixed(1)} MB/s`
+}
+
+const formatBytes = (bytes: number): string => {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`
+}
+
+const getDownloadPercent = (): number => {
+  if (!downloadProgress.value || !downloadProgress.value.total) return 0
+  return Math.round((downloadProgress.value.downloaded / downloadProgress.value.total) * 100)
+}
 
 // Event unsubscribe functions
 let unlistenProgress: (() => void) | null = null
 let unlistenComplete: (() => void) | null = null
 let unlistenError: (() => void) | null = null
+let unlistenExtraction: UnlistenFn | null = null
 
 // Validate settings
 const isValid = computed(() => {
@@ -622,39 +916,45 @@ const checkKernelStatus = async () => {
     // Check bundled kernel
     bundledKernelPath.value = await kernelApi.getBundledKernelPath()
     
-    // 如果用户没有配置内核路径，且检测到内嵌内核，自动使用内嵌内核
+    // 如果用户没有配置内核路径，且检测到内嵌内核，自动填充
+    // 保存逻辑交给 watch 处理
     if (!settings.value.kernelPath && bundledKernelPath.value) {
       settings.value.kernelPath = bundledKernelPath.value
+      console.log('内核路径已自动填充，watch 将自动保存')
     }
   } catch (error) {
     console.error('Failed to check kernel status:', error)
   }
 }
 
-// Reset kernel URL to default
-const resetKernelUrl = () => {
-  customKernelUrl.value = kernelApi.DEFAULT_KERNEL_URL
-  ElMessage.info('已重置为默认下载地址')
-}
-
-// Handle kernel download
+// Handle kernel download (下载地址由后端 API 自动获取)
 const handleDownloadKernel = async () => {
-  if (!customKernelUrl.value.trim()) {
-    ElMessage.warning('请输入内核下载地址')
-    return
-  }
-
   isDownloading.value = true
   downloadProgress.value = {
     downloaded: 0,
     total: null,
     speed: 0,
     status: 'Downloading',
-    message: '准备下载...'
+    message: '正在获取下载地址...'
   }
 
   try {
-    await kernelApi.downloadKernel(customKernelUrl.value)
+    // 1. 调用后端 API 获取内核下载信息
+    const downloadInfo = await kernelApi.getKernelDownloadInfo('windows', 'x86_64', '0.3.0')
+    
+    if (!downloadInfo.has_update) {
+      isDownloading.value = false
+      ElMessage.info('当前内核已是最新版本')
+      return
+    }
+    
+    // 2. 选择优先级最高的下载源
+    const downloadUrl = downloadInfo.downloads?.[0]?.url || kernelApi.DEFAULT_KERNEL_URL
+    
+    downloadProgress.value.message = `准备下载内核 v${downloadInfo.version}...`
+    
+    // 3. 开始下载
+    await kernelApi.downloadKernel(downloadUrl)
   } catch (error) {
     isDownloading.value = false
     ElMessage.error('启动下载失败: ' + error)
@@ -672,19 +972,40 @@ const setupEventListeners = async () => {
     downloadProgress.value = null
     await checkKernelStatus()
     
-    // Auto-set kernel path
+    // 自动设置并保存内核路径
     if (kernelInstalled.value) {
       const kernelPath = await kernelApi.getKernelPath()
       settings.value.kernelPath = kernelPath
+      
+      // 自动保存到数据库
+      try {
+        await settingsApi.setSettingValue('kernel_path', kernelPath)
+        console.log('内核下载完成，路径已自动配置:', kernelPath)
+      } catch (error) {
+        console.error('自动保存内核路径失败:', error)
+      }
     }
     
-    ElMessage.success('内核下载安装完成！')
+    ElMessage.success('内核下载安装完成！路径已自动配置')
   })
 
   unlistenError = await kernelApi.onDownloadError((error) => {
     isDownloading.value = false
     downloadProgress.value = null
     ElMessage.error('下载失败: ' + error)
+  })
+  
+  // 监听内核解压完成事件（用于内嵌内核解压）
+  unlistenExtraction = await listen<boolean>('kernel-extraction-complete', async (event) => {
+    console.log('内核解压完成事件:', event.payload)
+    
+    if (event.payload === true) {
+      // 重新检查内核状态
+      await checkKernelStatus()
+      
+      // 刷新界面显示（设置页面会自动更新内核路径）
+      console.log('设置页面：内核路径已刷新')
+    }
   })
 }
 
@@ -693,6 +1014,7 @@ const cleanupEventListeners = () => {
   if (unlistenProgress) unlistenProgress()
   if (unlistenComplete) unlistenComplete()
   if (unlistenError) unlistenError()
+  if (unlistenExtraction) unlistenExtraction()
 }
 
 // Select kernel path
@@ -793,14 +1115,26 @@ const handleReset = () => {
 
 // Initialize
 onMounted(async () => {
+  initThemeMode()
   await loadSettings()
   await checkKernelStatus()
   await setupEventListeners()
+  
+  // 初始化自启动状态
+  try {
+    autoStart.value = await isEnabled()
+  } catch (error) {
+    console.error('Failed to check autostart status:', error)
+  }
 })
 
 // Cleanup
 onUnmounted(() => {
   cleanupEventListeners()
+  // 清理系统主题监听器
+  if (systemThemeMediaQuery) {
+    systemThemeMediaQuery.removeEventListener('change', () => {})
+  }
 })
 </script>
 
@@ -1014,7 +1348,7 @@ onUnmounted(() => {
 // Info box
 .info-box {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.75rem;
   padding: 1rem;
   background: #eff6ff;
@@ -1024,12 +1358,23 @@ onUnmounted(() => {
   .material-symbols-outlined {
     color: var(--color-primary);
     font-size: 1.25rem;
+    flex-shrink: 0;
+    margin-top: 0.125rem;
   }
 
   p {
     font-size: 0.75rem;
     color: #475569;
     margin: 0;
+  }
+
+  code {
+    padding: 0.125rem 0.375rem;
+    font-size: 0.6875rem;
+    font-family: ui-monospace, monospace;
+    color: var(--color-primary);
+    background: rgba(59, 130, 246, 0.1);
+    border-radius: 0.25rem;
   }
 }
 
@@ -1074,6 +1419,43 @@ onUnmounted(() => {
   border: 1px solid #e2e8f0;
   border-radius: 0.75rem;
   margin-bottom: 1.5rem;
+}
+
+// Kernel installed section
+.kernel-installed {
+  padding: 1.5rem;
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.1) 0%, rgba(59, 130, 246, 0.1) 100%);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  border-radius: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.installed-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.installed-icon {
+  font-size: 2.5rem;
+  color: #16a34a;
+}
+
+.installed-info {
+  flex: 1;
+}
+
+.installed-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #16a34a;
+  margin: 0 0 0.25rem 0;
+}
+
+.installed-version {
+  font-size: 0.875rem;
+  color: #64748b;
+  margin: 0;
 }
 
 .download-header {
@@ -1185,6 +1567,8 @@ onUnmounted(() => {
   color: #ef4444;
 }
 
+.mt-1 { margin-top: 0.25rem; }
+.mt-2 { margin-top: 0.5rem; }
 .mt-4 { margin-top: 1rem; }
 .mt-6 { margin-top: 1.5rem; }
 .w-64 { width: 16rem; }
@@ -1958,6 +2342,157 @@ onUnmounted(() => {
   color: #64748b;
 }
 
+// About page styles
+.about-card {
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+}
+
+.about-header {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.about-logo {
+  width: 80px;
+  height: 80px;
+  border-radius: 1rem;
+  background: linear-gradient(135deg, var(--color-primary), #8b5cf6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 16px rgba(59, 130, 246, 0.25);
+
+  .material-symbols-outlined {
+    font-size: 2.5rem;
+    color: white;
+  }
+}
+
+.about-info {
+  flex: 1;
+}
+
+.about-name {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 0.25rem 0;
+}
+
+.about-tagline {
+  font-size: 0.9375rem;
+  color: #64748b;
+  margin: 0;
+}
+
+.about-version-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+}
+
+.version-item {
+  padding: 1rem;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.version-label {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.version-value {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.feature-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.feature-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+}
+
+.feature-icon {
+  font-size: 1.5rem;
+  color: var(--color-primary);
+}
+
+.feature-content {
+  flex: 1;
+}
+
+.feature-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 0.25rem 0;
+}
+
+.feature-desc {
+  font-size: 0.8125rem;
+  color: #64748b;
+  margin: 0;
+}
+
+.contact-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.contact-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  color: #475569;
+
+  .material-symbols-outlined {
+    font-size: 1.25rem;
+    color: var(--color-primary);
+  }
+}
+
+.contact-link {
+  color: var(--color-primary);
+  text-decoration: none;
+  
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.about-copyright {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e2e8f0;
+  font-size: 0.75rem;
+  color: #94a3b8;
+  text-align: center;
+}
+
 // Dark mode
 html.dark {
   .page-header {
@@ -2023,6 +2558,11 @@ html.dark {
 
     p {
       color: #94a3b8;
+    }
+
+    code {
+      color: #60a5fa;
+      background: rgba(59, 130, 246, 0.15);
     }
   }
 
@@ -2139,6 +2679,19 @@ html.dark {
   .kernel-download {
     background: #1f2937;
     border-color: #374151;
+  }
+
+  .kernel-installed {
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(59, 130, 246, 0.15) 100%);
+    border-color: rgba(34, 197, 94, 0.4);
+  }
+
+  .installed-title {
+    color: #4ade80;
+  }
+
+  .installed-version {
+    color: #9ca3af;
   }
 
   .download-title {
@@ -2263,6 +2816,55 @@ html.dark {
 
   .progress-footer {
     color: #9ca3af;
+  }
+
+  // About page dark mode
+  .about-card {
+    background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+  }
+
+  .about-logo {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.3), rgba(139, 92, 246, 0.3));
+  }
+
+  .about-name {
+    color: #f1f5f9;
+  }
+
+  .about-tagline {
+    color: #9ca3af;
+  }
+
+  .version-item {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: #374151;
+  }
+
+  .feature-item {
+    background: #1f2937;
+    border-color: #374151;
+  }
+
+  .feature-title {
+    color: #f1f5f9;
+  }
+
+  .feature-desc {
+    color: #9ca3af;
+  }
+
+  .contact-item {
+    background: #1f2937;
+    border-color: #374151;
+    color: #d1d5db;
+  }
+
+  .contact-link {
+    color: #60a5fa;
+  }
+
+  .about-copyright {
+    color: #6b7280;
   }
 }
 </style>

@@ -10,7 +10,7 @@ const THEME_STORAGE_KEY = 'chubao-theme'
 
 // 全局主题状态
 const currentTheme = ref<ThemeMode>(
-    (localStorage.getItem(THEME_STORAGE_KEY) as ThemeMode) || 'dark'
+    (localStorage.getItem(THEME_STORAGE_KEY) as ThemeMode) || 'light'
 )
 
 /**

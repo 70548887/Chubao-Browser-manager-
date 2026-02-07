@@ -22,9 +22,9 @@ export function useDarkMode() {
 
     const initDarkMode = () => {
         const savedTheme = localStorage.getItem('theme')
-        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
 
-        isDark.value = savedTheme === 'dark' || (!savedTheme && prefersDark)
+        // 新用户默认使用浅色模式，只有明确保存为 dark 时才启用深色模式
+        isDark.value = savedTheme === 'dark'
 
         if (isDark.value) {
             document.documentElement.classList.add('dark')

@@ -517,7 +517,7 @@ impl KernelDownloader {
         let kernel_dir = self.get_kernel_dir();
         info!("Extracting bundled kernel to: {:?}", kernel_dir);
 
-        // 更新状态为解压中
+        // 更新状态为解压中 - 发送初始进度
         {
             let mut progress = self.progress.lock().await;
             progress.status = DownloadStatus::Extracting;
@@ -526,6 +526,9 @@ impl KernelDownloader {
             progress.total = None;
             progress_callback(progress.clone());
         }
+        
+        // 等待一小段时间确保前端收到初始进度事件
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
         // 确保目标目录存在
         fs::create_dir_all(&kernel_dir)

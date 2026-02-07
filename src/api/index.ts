@@ -12,4 +12,5 @@ export * from './groupApi'
 export * from './tagApi'
 export * from './recycleBinApi'
 export * from './proxyApi'
-
+export * as authApi from './authApi'
+export * as notificationApi from './notificationApi'

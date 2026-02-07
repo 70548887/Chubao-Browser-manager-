@@ -11,11 +11,13 @@ use std::path::{Path, PathBuf};
 use tokio::fs::{self, File};
 use tokio::io::AsyncWriteExt;
 use tracing::{info, warn, error};
+use super::config;  // 导入统一配置
 
 // ==================== 常量 ====================
 
-/// 默认更新服务器地址（生产环境替换）
-pub const DEFAULT_UPDATE_SERVER: &str = "http://localhost:8080";
+/// 默认更新服务器地址（使用统一配置）
+pub const DEFAULT_UPDATE_SERVER: &str = config::API_BASE_URL;
+
 
 // ==================== 数据结构 ====================
 
@@ -104,9 +106,10 @@ pub async fn check_launcher_update(
     arch: &str,
 ) -> Result<UpdateInfo> {
     let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(config::REQUEST_TIMEOUT_SECS))
         .build()?;
 
+    // 使用统一配置构建 URL（如果 server_url 是默认值，可以用配置函数）
     let url = format!(
         "{}/api/v1/updates/launcher?version={}&platform={}&arch={}",
         server_url, current_version, platform, arch
@@ -163,6 +166,41 @@ pub async fn check_kernel_update(
     }
 
     resp.data.context("响应数据为空")
+}
+
+// ==================== 内核下载信息（不含鉴权版本，后续可扩展） ====================
+
+/// 获取内核下载信息
+/// 
+/// 从云服务器获取内核下载地址和版本信息
+/// 前端通过 IPC 调用，避免暴露 API 地址
+pub async fn get_kernel_download_info(
+    server_url: &str,
+    platform: &str,
+    arch: &str,
+    launcher_version: &str,
+) -> Result<serde_json::Value> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(config::REQUEST_TIMEOUT_SECS))
+        .build()?;
+
+    let url = format!(
+        "{}/api/v1/kernel/download-info?platform={}&arch={}&launcher_version={}",
+        server_url, platform, arch, launcher_version
+    );
+
+    info!("Fetching kernel download info: {}", url);
+
+    let resp = client
+        .get(&url)
+        .send()
+        .await
+        .context("请求内核下载信息失败")?
+        .json::<serde_json::Value>()
+        .await
+        .context("解析响应失败")?;
+
+    Ok(resp)
 }
 
 // ==================== 下载 + SHA256 强制校验 ====================

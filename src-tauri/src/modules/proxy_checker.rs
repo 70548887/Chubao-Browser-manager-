@@ -9,6 +9,7 @@
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
 use tracing::{info, warn, debug, error};
+use super::config;  // 导入统一配置
 
 /// IP-API.com 响应结构
 #[derive(Debug, Deserialize)]
@@ -117,8 +118,8 @@ pub struct ProxyChecker {
 impl Default for ProxyChecker {
     fn default() -> Self {
         Self {
-            timeout_secs: 10,
-            ip_api_url: "http://ip-api.com/json".to_string(),
+            timeout_secs: config::REQUEST_TIMEOUT_SECS,
+            ip_api_url: config::IP_GEO_API_URL.to_string(),
         }
     }
 }

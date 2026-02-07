@@ -1,6 +1,7 @@
 // Kernel Download API
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
+import { ApiEndpoints, buildApiUrl, FALLBACK_KERNEL_URL } from '@/config'
 
 // Download progress interface
 export interface DownloadProgress {
@@ -19,6 +20,90 @@ export interface KernelVersionInfo {
     source: string
     files_count: number
     total_size_bytes: number
+}
+
+// 内核下载源接口
+export interface KernelDownloadSource {
+    id: string
+    name: string
+    url: string
+    priority: number
+}
+
+// 内核下载信息接口
+export interface KernelDownloadInfo {
+    has_update: boolean
+    version: string
+    release_date?: string
+    changelog?: string
+    file_size?: number
+    file_hash?: string
+    min_launcher_version?: string
+    downloads?: KernelDownloadSource[]
+    current_is_latest?: boolean
+}
+
+// API 响应接口
+interface ApiResponse<T> {
+    code: number
+    message: string
+    data: T | null
+}
+
+/**
+ * 获取内核下载信息（通过后端代理请求，安全架构）
+ * @param platform 平台：windows / darwin / linux
+ * @param arch 架构：x86_64 / aarch64
+ * @param launcherVersion 启动器版本
+ * @returns 内核下载信息
+ */
+export async function getKernelDownloadInfo(
+    platform: string = 'windows',
+    arch: string = 'x86_64',
+    launcherVersion: string = '0.3.0'
+): Promise<KernelDownloadInfo> {
+    try {
+        // ✅ 通过 IPC 调用后端接口，避免前端暴露 API 地址
+        const result = await invoke<any>('get_kernel_download_info_api', {
+            platform,
+            arch,
+        })
+
+        // 处理错误码
+        if (result.code !== 0) {
+            switch (result.code) {
+                case 1001:
+                    throw new Error('缺少必要参数')
+                case 1002:
+                    throw new Error('未找到适配的内核版本')
+                case 1003:
+                    throw new Error('启动器版本过低，请先更新启动器')
+                case 5000:
+                    throw new Error('服务器内部错误，请稍后重试')
+                default:
+                    throw new Error(result.message || '获取内核下载信息失败')
+            }
+        }
+
+        if (!result.data) {
+            throw new Error('响应数据为空')
+        }
+
+        return result.data
+    } catch (error) {
+        console.error('Failed to get kernel download info:', error)
+        // 降级：返回默认下载信息
+        return {
+            has_update: true,
+            version: '146',
+            downloads: [{
+                id: 'default',
+                name: '默认下载源',
+                url: DEFAULT_KERNEL_URL,
+                priority: 1
+            }]
+        }
+    }
 }
 
 /**
@@ -132,6 +217,23 @@ export async function getBundledKernelPathByVersion(version: string): Promise<st
 }
 
 /**
+ * 手动触发内核检查和解压 (用于登录后延迟检查)
+ * 
+ * 当用户登录/注册完成进入主页面时,如果启动时内核解压未触发或未完成,
+ * 可以调用此函数手动触发检查和解压流程
+ * 
+ * @returns true: 触发了解压流程, false: 内核已存在或无需解压
+ */
+export async function triggerKernelExtraction(): Promise<boolean> {
+    try {
+        return await invoke<boolean>('trigger_kernel_extraction')
+    } catch (error) {
+        console.error('Failed to trigger kernel extraction:', error)
+        throw new Error(`触发内核解压失败: ${error}`)
+    }
+}
+
+/**
  * Listen to download progress events
  */
 export function onDownloadProgress(callback: (progress: DownloadProgress) => void): Promise<UnlistenFn> {
@@ -158,5 +260,5 @@ export function onDownloadError(callback: (error: string) => void): Promise<Unli
     })
 }
 
-// Default kernel download URL
-export const DEFAULT_KERNEL_URL = 'https://github.com/70548887/Chubao-Browser-manager-/releases/download/v0.2.0-kernel146/chromium-kernel-win64-v146.zip'
+// 默认内核下载地址（使用统一配置）
+export const DEFAULT_KERNEL_URL = FALLBACK_KERNEL_URL

@@ -1,6 +1,6 @@
 [package]
 name = "browser-manager"
-version = "0.3.0"
+version = "1.1.0"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
@@ -21,6 +21,7 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
+tauri-plugin-autostart = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
@@ -63,6 +64,9 @@ futures-util = "0.3"
 
 # ZIP extraction (for kernel installation)
 zip = "2.2"
+
+# Secure credential storage (for token management)
+keyring = "3"
 
 # Windows API (for process management)
 [target.'cfg(windows)'.dependencies]

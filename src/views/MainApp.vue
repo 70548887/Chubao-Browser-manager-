@@ -18,6 +18,8 @@ import UpdateDialog from '@/components/common/UpdateDialog.vue'
 import { useUIStore } from '@/stores/ui.store'
 import { createProfile } from '@/api/profileApi'
 import { Message } from '@/utils/message'
+import { triggerKernelExtraction, isKernelInstalled, getKernelPath } from '@/api/kernelApi'
+import { getSettingValue, setSettingValue } from '@/api/settingsApi'
 
 // 当前页面
 const currentPage = ref<'dashboard' | 'groups' | 'recycle' | 'proxy' | 'tags' | 'settings' | 'rpa' | 'extensions'>('dashboard')
@@ -106,12 +108,58 @@ const navigateTo = (page: 'dashboard' | 'groups' | 'recycle' | 'proxy' | 'tags' 
 provide('currentPage', computed(() => currentPage.value))
 provide('navigateTo', navigateTo)
 
-// 模拟检查更新 (仅用于演示)
-onMounted(() => {
-  setTimeout(() => {
-    // uiStore.setUpdateDialogVisible(true)
-  }, 2000)
+// 组件挂载后触发内核检查 (异步后台执行,不阻塞UI)
+onMounted(async () => {
+  // 延迟触发内核检查和解压 (给用户登录动画一点时间)
+  setTimeout(async () => {
+    try {
+      console.log('🔍 [MainApp] 触发延迟内核检查...')
+      const triggered = await triggerKernelExtraction()
+      if (triggered) {
+        console.log('✅ [MainApp] 内核解压已在后台触发')
+      } else {
+        console.log('ℹ️ [MainApp] 内核已存在,无需解压')
+      }
+      
+      // 自动保存内核路径到数据库（如果内核存在但数据库为空）
+      await autoSaveKernelPath()
+    } catch (error) {
+      console.error('❌ [MainApp] 触发内核检查失败:', error)
+      // 静默失败,不影响用户使用
+    }
+  }, 1000) // 登录后1秒触发
 })
+
+/**
+ * 自动检测并保存内核路径到数据库
+ * 解决：内核文件存在但数据库 kernel_path 为空的问题
+ */
+async function autoSaveKernelPath() {
+  try {
+    // 检查数据库中是否已有路径
+    const savedPath = await getSettingValue('kernel_path')
+    if (savedPath && savedPath.trim() !== '') {
+      console.log('✅ [MainApp] 内核路径已配置:', savedPath)
+      return
+    }
+    
+    // 数据库为空，检查内核是否已安装
+    const installed = await isKernelInstalled()
+    if (!installed) {
+      console.log('ℹ️ [MainApp] 内核未安装，跳过路径配置')
+      return
+    }
+    
+    // 内核已安装，获取路径并保存
+    const kernelPath = await getKernelPath()
+    if (kernelPath) {
+      await setSettingValue('kernel_path', kernelPath)
+      console.log('✅ [MainApp] 内核路径已自动保存到数据库:', kernelPath)
+    }
+  } catch (error) {
+    console.error('❌ [MainApp] 自动保存内核路径失败:', error)
+  }
+}
 </script>
 
 <template>

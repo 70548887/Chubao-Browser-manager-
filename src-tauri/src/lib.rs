@@ -120,6 +120,29 @@ async fn get_all_settings(state: State<'_, AppState>) -> Result<HashMap<String, 
     Ok(map)
 }
 
+/// 获取智能默认用户数据目录
+/// 优先使用非系统盘(D:, E:等)，如果只有C盘则使用AppData
+#[tauri::command]
+async fn get_smart_default_user_data_dir(
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    // 检查非系统盘是否存在
+    #[cfg(windows)]
+    {
+        // 按优先级检查 D: E: F: 等盘符
+        for drive in ['D', 'E', 'F', 'G', 'H'] {
+            let drive_path = format!("{}:\\", drive);
+            if Path::new(&drive_path).exists() {
+                let cache_dir = format!("{}:\\QutabBrowser-Cache", drive);
+                return Ok(cache_dir);
+            }
+        }
+    }
+    
+    // 如果没有其他盘，使用默认的 AppData 目录
+    Ok(state.app_data_dir.to_string_lossy().to_string())
+}
+
 fn proxy_to_arg(profile: &Profile) -> Option<String> {
     let proxy = profile.proxy.as_ref()?;
     let scheme = match proxy.r#type {
@@ -2336,6 +2359,85 @@ async fn get_bundled_kernel_path_by_version(version: String) -> Result<Option<St
         .map(|p| p.display().to_string()))
 }
 
+/// 手动触发内核检查和解压 (用于登录后延迟检查)
+/// 
+/// 当用户登录/注册完成进入主页面时,如果启动时内核解压未触发或未完成,
+/// 可以调用此命令手动触发检查和解压流程
+#[tauri::command]
+async fn trigger_kernel_extraction(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<bool, String> {
+    let downloader = state.kernel_downloader.lock().await;
+    
+    // 如果内核已安装,无需解压
+    if downloader.is_kernel_installed() {
+        tracing::info!("内核已安装,无需触发解压");
+        return Ok(false);
+    }
+    
+    drop(downloader); // 释放锁
+    
+    // 查找内嵌的内核压缩包路径
+    let possible_paths = vec![
+        // 生产模式: resource_dir()
+        app.path().resource_dir()
+            .ok()
+            .map(|res_dir| res_dir.join("chromium-146-windows-x64.zip")),
+        // 开发模式: 项目根目录/resources
+        std::env::current_dir()
+            .ok()
+            .and_then(|cwd| cwd.parent().map(|p| p.to_path_buf()))
+            .map(|project_root| project_root.join("resources").join("chromium-146-windows-x64.zip")),
+    ];
+
+    let bundled_kernel_zip = possible_paths
+        .into_iter()
+        .flatten()
+        .find(|path| {
+            path.exists() || path.with_extension("zip.001").exists()
+        });
+    
+    if let Some(zip_path) = bundled_kernel_zip {
+        tracing::info!("触发延迟内核解压: {:?}", zip_path);
+        
+        let downloader = state.kernel_downloader.clone();
+        let app_handle_progress = app.clone();
+        let app_handle_result = app.clone();
+        
+        // 异步解压,不阻塞前端
+        tauri::async_runtime::spawn(async move {
+            let downloader = downloader.lock().await;
+            let result = downloader.extract_bundled_kernel(
+                &zip_path,
+                move |progress| {
+                    let _ = app_handle_progress.emit("kernel-extraction-progress", &progress);
+                }
+            ).await;
+            
+            match result {
+                Ok(true) => {
+                    tracing::info!("延迟触发的内核解压已完成");
+                    let _ = app_handle_result.emit("kernel-extraction-complete", true);
+                },
+                Ok(false) => {
+                    tracing::info!("内核已存在,无需解压");
+                    let _ = app_handle_result.emit("kernel-extraction-complete", false);
+                },
+                Err(e) => {
+                    tracing::error!("延迟触发的内核解压失败: {}", e);
+                    let _ = app_handle_result.emit("kernel-extraction-error", e.to_string());
+                },
+            }
+        });
+        
+        Ok(true)
+    } else {
+        tracing::info!("未找到内嵌的内核压缩包");
+        Ok(false)
+    }
+}
+
 // ==================== 更新相关 Commands ====================
 
 /// 检查启动器更新
@@ -2389,10 +2491,258 @@ async fn check_kernel_update_api(
     };
 
     modules::app_updater::check_kernel_update(
-        &server, &kernel_version, "windows", arch, launcher_version,
+        &server,
+        &kernel_version,
+        "windows",
+        arch,
+        launcher_version,
     )
     .await
     .map_err(|e| e.to_string())
+}
+
+/// 获取内核下载信息（通过后端代理请求）
+#[tauri::command]
+async fn get_kernel_download_info_api(
+    state: State<'_, AppState>,
+    platform: Option<String>,
+    arch: Option<String>,
+) -> Result<serde_json::Value, String> {
+    let server = get_setting(&state.pool, "update_server_url")
+        .await?
+        .unwrap_or_else(|| modules::app_updater::DEFAULT_UPDATE_SERVER.to_string());
+
+    let platform = platform.unwrap_or_else(|| "windows".to_string());
+    let arch = arch.unwrap_or_else(|| {
+        if cfg!(target_pointer_width = "64") {
+            "x86_64".to_string()
+        } else {
+            "x86".to_string()
+        }
+    });
+    let launcher_version = env!("CARGO_PKG_VERSION");
+
+    modules::app_updater::get_kernel_download_info(
+        &server,
+        &platform,
+        &arch,
+        launcher_version,
+    )
+    .await
+    .map_err(|e| e.to_string())
+}
+
+// ==================== 用户认证 Commands ====================
+
+/// 用户登录
+#[tauri::command]
+async fn auth_login(
+    state: State<'_, AppState>,
+    account: String,
+    password: String,
+    remember: bool,
+) -> Result<modules::auth::LoginResponse, String> {
+    let server = get_setting(&state.pool, "update_server_url")
+        .await?
+        .unwrap_or_else(|| modules::app_updater::DEFAULT_UPDATE_SERVER.to_string());
+
+    modules::auth::login(
+        &server,
+        modules::auth::LoginRequest {
+            account,
+            password,
+            remember,
+        },
+    )
+    .await
+    .map_err(|e| e.to_string())
+}
+
+/// 用户注册
+#[tauri::command]
+async fn auth_register(
+    state: State<'_, AppState>,
+    username: String,
+    email: String,
+    password: String,
+    confirm_password: String,
+    invite_code: Option<String>,
+) -> Result<modules::auth::UserInfo, String> {
+    let server = get_setting(&state.pool, "update_server_url")
+        .await?
+        .unwrap_or_else(|| modules::app_updater::DEFAULT_UPDATE_SERVER.to_string());
+
+    modules::auth::register(
+        &server,
+        modules::auth::RegisterRequest {
+            username,
+            email,
+            password,
+            confirm_password,
+            invite_code,
+        },
+    )
+    .await
+    .map_err(|e| e.to_string())
+}
+
+/// 用户登出
+#[tauri::command]
+async fn auth_logout(
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let server = get_setting(&state.pool, "update_server_url")
+        .await?
+        .unwrap_or_else(|| modules::app_updater::DEFAULT_UPDATE_SERVER.to_string());
+
+    modules::auth::logout(&server)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 检查登录状态
+#[tauri::command]
+fn auth_check_login() -> bool {
+    modules::auth::is_logged_in()
+}
+
+/// 获取当前用户信息
+#[tauri::command]
+async fn auth_get_user(
+    state: State<'_, AppState>,
+) -> Result<modules::auth::UserInfo, String> {
+    let server = get_setting(&state.pool, "update_server_url")
+        .await?
+        .unwrap_or_else(|| modules::app_updater::DEFAULT_UPDATE_SERVER.to_string());
+
+    modules::auth::get_user_info(&server)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 刷新 Token
+#[tauri::command]
+async fn auth_refresh_token(
+    state: State<'_, AppState>,
+) -> Result<modules::auth::LoginResponse, String> {
+    let server = get_setting(&state.pool, "update_server_url")
+        .await?
+        .unwrap_or_else(|| modules::app_updater::DEFAULT_UPDATE_SERVER.to_string());
+
+    modules::auth::refresh_token(&server)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+// ==================== 许可证 Commands ====================
+
+/// 验证许可证
+#[tauri::command]
+async fn license_validate(
+    state: State<'_, AppState>,
+) -> Result<modules::auth::LicenseInfo, String> {
+    let server = get_setting(&state.pool, "update_server_url")
+        .await?
+        .unwrap_or_else(|| modules::app_updater::DEFAULT_UPDATE_SERVER.to_string());
+
+    modules::auth::validate_license(&server)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 激活许可证
+#[tauri::command]
+async fn license_activate(
+    state: State<'_, AppState>,
+    license_key: String,
+) -> Result<modules::auth::LicenseInfo, String> {
+    let server = get_setting(&state.pool, "update_server_url")
+        .await?
+        .unwrap_or_else(|| modules::app_updater::DEFAULT_UPDATE_SERVER.to_string());
+
+    modules::auth::activate_license(&server, &license_key)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+// ==================== 消息通知 Commands ====================
+
+/// 获取通知列表
+#[tauri::command]
+async fn notification_list(
+    state: State<'_, AppState>,
+    page: Option<i32>,
+    page_size: Option<i32>,
+) -> Result<modules::notification::NotificationListResponse, String> {
+    let server = get_setting(&state.pool, "update_server_url")
+        .await?
+        .unwrap_or_else(|| modules::app_updater::DEFAULT_UPDATE_SERVER.to_string());
+
+    modules::notification::get_notifications(
+        &server,
+        page.unwrap_or(1),
+        page_size.unwrap_or(20),
+    )
+    .await
+    .map_err(|e| e.to_string())
+}
+
+/// 获取未读通知数量
+#[tauri::command]
+async fn notification_unread_count(
+    state: State<'_, AppState>,
+) -> Result<i32, String> {
+    let server = get_setting(&state.pool, "update_server_url")
+        .await?
+        .unwrap_or_else(|| modules::app_updater::DEFAULT_UPDATE_SERVER.to_string());
+
+    modules::notification::get_unread_count(&server)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 标记通知为已读
+#[tauri::command]
+async fn notification_mark_read(
+    state: State<'_, AppState>,
+    ids: Vec<String>,
+) -> Result<(), String> {
+    let server = get_setting(&state.pool, "update_server_url")
+        .await?
+        .unwrap_or_else(|| modules::app_updater::DEFAULT_UPDATE_SERVER.to_string());
+
+    modules::notification::mark_as_read(&server, ids)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 标记所有通知为已读
+#[tauri::command]
+async fn notification_mark_all_read(
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let server = get_setting(&state.pool, "update_server_url")
+        .await?
+        .unwrap_or_else(|| modules::app_updater::DEFAULT_UPDATE_SERVER.to_string());
+
+    modules::notification::mark_all_as_read(&server)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 删除通知
+#[tauri::command]
+async fn notification_delete(
+    state: State<'_, AppState>,
+    id: String,
+) -> Result<(), String> {
+    let server = get_setting(&state.pool, "update_server_url")
+        .await?
+        .unwrap_or_else(|| modules::app_updater::DEFAULT_UPDATE_SERVER.to_string());
+
+    modules::notification::delete_notification(&server, &id)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// 下载启动器更新
@@ -2508,6 +2858,10 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec!["--autostart"]),
+        ))
         .setup(|app| {
             let app_data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&app_data_dir)?;
@@ -2578,15 +2932,20 @@ pub fn run() {
                 let downloader = Arc::clone(&kernel_downloader);
                 let base_dir_clone = kernel_base_dir.clone();
                 let version_clone = kernel_version.clone();
-                let app_handle = app.handle().clone();
+                let app_handle_progress = app.handle().clone();  // 用于进度回调
+                let app_handle_result = app.handle().clone();    // 用于结果回调
                 
                 tauri::async_runtime::spawn(async move {
+                    // 等待前端组件加载完成 (延迟2秒)
+                    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                    tracing::info!("开始执行内核解压 (延迟启动)");
+                    
                     let downloader = downloader.lock().await;
                     let result = downloader.extract_bundled_kernel(
                         &zip_path,
                         move |progress| {
                             // 发送进度事件到前端
-                            let _ = app_handle.emit("kernel-extraction-progress", &progress);
+                            let _ = app_handle_progress.emit("kernel-extraction-progress", &progress);
                         }
                     ).await;
                     
@@ -2594,15 +2953,15 @@ pub fn run() {
                         Ok(true) => {
                             tracing::info!("内嵌内核已成功解压到: {:?}", base_dir_clone.join(&version_clone));
                             // 发送完成事件
-                            let _ = app_handle.emit("kernel-extraction-complete", true);
+                            let _ = app_handle_result.emit("kernel-extraction-complete", true);
                         },
                         Ok(false) => {
                             tracing::info!("内核已存在或无需解压");
-                            let _ = app_handle.emit("kernel-extraction-complete", false);
+                            let _ = app_handle_result.emit("kernel-extraction-complete", false);
                         },
                         Err(e) => {
                             tracing::error!("解压内嵌内核失败: {}", e);
-                            let _ = app_handle.emit("kernel-extraction-error", e.to_string());
+                            let _ = app_handle_result.emit("kernel-extraction-error", e.to_string());
                         },
                     }
                 });
@@ -2682,6 +3041,7 @@ pub fn run() {
             get_setting_value,
             set_setting_value,
             get_all_settings,
+            get_smart_default_user_data_dir,
             // Browser commands
             launch_browser,
             stop_browser,
@@ -2736,14 +3096,32 @@ pub fn run() {
             get_bundled_kernel_path,
             list_bundled_kernel_versions,
             get_bundled_kernel_path_by_version,
+            trigger_kernel_extraction, // 手动触发内核解压
             // App update commands - 应用自动更新
             check_app_update,
             check_kernel_update_api,
+            get_kernel_download_info_api,  // 获取内核下载信息
             download_app_update,
             download_kernel_update,
             install_app_update,
             install_kernel_update_cmd,
             get_running_browser_count,
+            // Auth commands - 用户认证
+            auth_login,
+            auth_register,
+            auth_logout,
+            auth_check_login,
+            auth_get_user,
+            auth_refresh_token,
+            // License commands - 许可证管理
+            license_validate,
+            license_activate,
+            // Notification commands - 消息通知
+            notification_list,
+            notification_unread_count,
+            notification_mark_read,
+            notification_mark_all_read,
+            notification_delete,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

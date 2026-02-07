@@ -61,7 +61,10 @@ export function useDashboard(navigateTo?: (page: string) => void) {
   const checkSystemSettings = async (): Promise<boolean> => {
     try {
       const kernelPath = await getSettingValue('kernel_path')
-      if (!kernelPath) {
+      console.log('检查内核路径:', kernelPath)
+      
+      // 判断是否为空或只有空白字符
+      if (!kernelPath || kernelPath.trim() === '') {
         const result = await ElMessageBox.confirm(
           '浏览器内核路径未设置，无法启动窗口。是否前往设置页面？',
           '配置提示',
@@ -76,9 +79,12 @@ export function useDashboard(navigateTo?: (page: string) => void) {
         }
         return false
       }
+      
+      console.log('✅ 内核路径校验通过:', kernelPath)
       return true
     } catch (e: any) {
       if (e === 'cancel') return false
+      console.error('检查系统设置失败:', e)
       Message.error('检查系统设置失败')
       return false
     }

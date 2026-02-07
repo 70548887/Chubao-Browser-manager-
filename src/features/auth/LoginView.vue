@@ -6,7 +6,9 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import CustomTitlebar from '@/components/layout/CustomTitlebar.vue'
+import * as authApi from '@/api/authApi'
 import './login.scss'
 
 const { t } = useI18n()
@@ -34,11 +36,18 @@ const handleLogin = async () => {
   
   isLoading.value = true
   try {
-    // TODO: 调用登录 API
-    console.log('Login:', formData.value)
-    // 模拟登录成功后跳转
-    // router.push('/')
-  } catch (error) {
+    const response = await authApi.login(
+      formData.value.account,
+      formData.value.password,
+      formData.value.remember
+    )
+    
+    ElMessage.success(`欢迎回来，${response.user.username}！`)
+    
+    // 登录成功后跳转到首页
+    router.push('/')
+  } catch (error: any) {
+    ElMessage.error(error.message || '登录失败，请检查账号密码')
     console.error('Login failed:', error)
   } finally {
     isLoading.value = false

@@ -13,6 +13,7 @@
     "core:window:allow-is-maximized",
     "core:window:allow-unminimize",
     "opener:default",
-    "dialog:default"
+    "dialog:default",
+    "autostart:default"
   ]
 }

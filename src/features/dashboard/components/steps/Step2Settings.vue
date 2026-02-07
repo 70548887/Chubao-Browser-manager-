@@ -10,6 +10,7 @@ import {
   GEOLOCATION_PROMPT_OPTIONS, 
   WINDOW_SIZE_OPTIONS 
 } from '../../composables/useCreateProfile'
+import { IP_GEO_API_URL } from '@/config'
 
 const props = defineProps<{
   modelValue: CreateProfileFormData
@@ -42,8 +43,8 @@ async function fetchGeoByIP() {
   ipGeoError.value = ''
   
   try {
-    // 使用 ip-api.com 免费 API
-    const response = await fetch('http://ip-api.com/json/?fields=status,message,country,city,lat,lon,timezone,query')
+    // 使用统一配置的 IP 查询 API
+    const response = await fetch(`${IP_GEO_API_URL}/?fields=status,message,country,city,lat,lon,timezone,query`)
     const data = await response.json()
     
     if (data.status === 'success') {

@@ -115,8 +115,11 @@ const close = () => {
 }
 
 onMounted(async () => {
+  console.log('🎯 [KernelExtractionProgress] 组件已挂载,开始监听事件')
+  
   // 监听进度事件
   unlistenProgress = await listen<DownloadProgress>('kernel-extraction-progress', (event) => {
+    console.log('📊 [KernelExtractionProgress] 收到进度事件:', event.payload)
     visible.value = true
     status.value = 'extracting'
     
@@ -129,9 +132,17 @@ onMounted(async () => {
 
   // 监听完成事件
   unlistenComplete = await listen<boolean>('kernel-extraction-complete', (event) => {
+    console.log('✅ [KernelExtractionProgress] 收到完成事件:', event.payload)
     if (event.payload) {
+      // 解压成功,显示成功提示
+      visible.value = true  // 修复: 需要设置为可见
       status.value = 'success'
       message.value = '内核初始化完成,应用已就绪!'
+      
+      // 3秒后自动关闭
+      setTimeout(() => {
+        close()
+      }, 3000)
     } else {
       // 内核已存在,不显示对话框
       visible.value = false
@@ -140,6 +151,7 @@ onMounted(async () => {
 
   // 监听错误事件
   unlistenError = await listen<string>('kernel-extraction-error', (event) => {
+    console.log('❌ [KernelExtractionProgress] 收到错误事件:', event.payload)
     status.value = 'error'
     message.value = `初始化失败: ${event.payload}`
     visible.value = true

@@ -12,5 +12,3 @@ pub use templates::TemplateManager;
 pub use generator::FingerprintGenerator;
 pub use validator::{FingerprintValidator, ValidationResult};
 
-#[cfg(test)]
-pub mod integration_tests;

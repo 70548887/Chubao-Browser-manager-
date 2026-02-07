@@ -4,6 +4,8 @@ import { useProfileStore } from '@/stores/profile.store'
 import { useGroupStore } from '@/stores/groupStore'
 import { Message } from '@/utils/message'
 import type { Profile } from '@/types'
+import * as kernelApi from '@/api/kernelApi'
+import * as settingsApi from '@/api/settingsApi'
 
 /**
  * Profile 状态变化事件
@@ -99,6 +101,33 @@ export async function initEventListeners() {
         const profile = profileStore.profiles.find(p => p.id === profileId)
         const name = profile?.name || profileId
         Message.error(`窗口 "${name}" 启动失败：${error}`)
+    })
+
+    // 6. 监听内核解压完成事件
+    await listen<boolean>('kernel-extraction-complete', async (event) => {
+        console.log('内核解压完成:', event.payload)
+        
+        if (event.payload === true) {
+            try {
+                // 获取内核路径
+                const kernelPath = await kernelApi.getKernelPath()
+                
+                // 自动保存到数据库
+                await settingsApi.setSettingValue('kernel_path', kernelPath)
+                
+                console.log('内核路径已自动保存到数据库:', kernelPath)
+                Message.success('内核解压完成！路径已自动配置')
+            } catch (error) {
+                console.error('自动保存内核路径失败:', error)
+                Message.warning('内核解压完成，但路径保存失败，请手动在设置中配置')
+            }
+        }
+    })
+
+    // 7. 监听内核解压错误事件
+    await listen<string>('kernel-extraction-error', (event) => {
+        console.error('内核解压失败:', event.payload)
+        Message.error(`内核解压失败：${event.payload}`)
     })
 
     console.log('Event listeners initialized')

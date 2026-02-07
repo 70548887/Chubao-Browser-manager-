@@ -1,3 +1,6 @@
+pub mod config;  // 统一配置管理
+pub mod auth;    // 用户认证与许可证
+pub mod notification;  // 消息通知
 pub mod profile;
 pub mod browser;
 pub mod settings;

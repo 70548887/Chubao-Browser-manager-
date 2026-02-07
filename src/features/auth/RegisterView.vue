@@ -6,7 +6,9 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import CustomTitlebar from '@/components/layout/CustomTitlebar.vue'
+import * as authApi from '@/api/authApi'
 import './register.scss'
 
 const { t } = useI18n()
@@ -75,11 +77,19 @@ const handleRegister = async () => {
   
   isLoading.value = true
   try {
-    // TODO: 调用注册 API
-    console.log('Register:', formData.value)
-    // 注册成功后跳转登录
-    // router.push('/login')
-  } catch (error) {
+    // 调用注册 API（使用手机号作为用户名，需要后端支持）
+    await authApi.register(
+      formData.value.phone,           // username（手机号）
+      `${formData.value.phone}@temp.com`, // email（临时邮箱，后续可修改）
+      formData.value.password,
+      formData.value.confirmPassword,
+      formData.value.verifyCode       // 验证码作为邀请码传递
+    )
+    
+    ElMessage.success('注册成功！请登录')
+    router.push('/login')
+  } catch (error: any) {
+    ElMessage.error(error.message || '注册失败，请重试')
     console.error('Register failed:', error)
   } finally {
     isLoading.value = false
