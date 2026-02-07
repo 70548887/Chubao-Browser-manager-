@@ -2538,8 +2538,39 @@ pub fn run() {
             let proxy_bridge_manager = Arc::new(ProxyBridgeManager::new());
 
             // Initialize kernel downloader
-            let kernel_dir = app_data_dir.join("kernel").join("win32");
-            let kernel_downloader = Arc::new(Mutex::new(KernelDownloader::new(kernel_dir)));
+            let kernel_base_dir = app_data_dir.join("kernel").join("win32");
+            let kernel_version = "146".to_string(); // 默认使用 Chromium 146
+            let kernel_downloader = Arc::new(Mutex::new(KernelDownloader::new(kernel_base_dir.clone(), kernel_version.clone())));
+
+            // 首次运行时自动解压内嵌的内核压缩包
+            let bundled_kernel_zip = app.path().resource_dir()
+                .ok()
+                .and_then(|res_dir| Some(res_dir.join("chromium-146-windows-x64.zip")));
+            
+            if let Some(zip_path) = bundled_kernel_zip {
+                if zip_path.exists() {
+                    let downloader = Arc::clone(&kernel_downloader);
+                    let base_dir_clone = kernel_base_dir.clone();
+                    let version_clone = kernel_version.clone();
+                    tauri::async_runtime::spawn(async move {
+                        let downloader = downloader.lock().await;
+                        let result = downloader.extract_bundled_kernel(
+                            &zip_path,
+                            |_progress| {
+                                // 可以在这里发送进度事件到前端
+                            }
+                        ).await;
+                        
+                        match result {
+                            Ok(true) => tracing::info!("内嵌内核已成功解压到: {:?}", base_dir_clone.join(&version_clone)),
+                            Ok(false) => tracing::info!("内核已存在或无需解压"),
+                            Err(e) => tracing::error!("解压内嵌内核失败: {}", e),
+                        }
+                    });
+                } else {
+                    tracing::info!("未找到内嵌的内核压缩包,将使用在线下载模式");
+                }
+            }
 
             // Create BrowserManager
             let browser_manager = Arc::new(BrowserManager::new(app.handle().clone()));

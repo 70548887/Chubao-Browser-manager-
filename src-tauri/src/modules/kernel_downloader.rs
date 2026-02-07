@@ -48,17 +48,24 @@ pub struct KernelVersionInfo {
 
 /// 内核下载器
 pub struct KernelDownloader {
-    /// 内核存放目录
-    kernel_dir: PathBuf,
+    /// 内核基础目录 (例如: AppData/kernel/win32)
+    kernel_base_dir: PathBuf,
+    /// 当前使用的内核版本 (例如: "146")
+    kernel_version: String,
     /// 当前进度
     progress: Arc<Mutex<DownloadProgress>>,
 }
 
 impl KernelDownloader {
     /// 创建新的下载器
-    pub fn new(kernel_dir: PathBuf) -> Self {
+    /// 
+    /// # Arguments
+    /// * `kernel_base_dir` - 内核基础目录 (例如: /path/to/kernel/win32)
+    /// * `kernel_version` - 内核版本号 (例如: "146")
+    pub fn new(kernel_base_dir: PathBuf, kernel_version: String) -> Self {
         Self {
-            kernel_dir,
+            kernel_base_dir,
+            kernel_version,
             progress: Arc::new(Mutex::new(DownloadProgress {
                 downloaded: 0,
                 total: None,
@@ -67,6 +74,11 @@ impl KernelDownloader {
                 message: String::new(),
             })),
         }
+    }
+
+    /// 获取当前内核版本的目录
+    pub fn get_kernel_dir(&self) -> PathBuf {
+        self.kernel_base_dir.join(&self.kernel_version)
     }
 
     /// 获取当前进度
@@ -81,8 +93,9 @@ impl KernelDownloader {
 
     /// Get installed kernel version info
     pub fn get_installed_version(&self) -> Option<KernelVersionInfo> {
+        let kernel_dir = self.get_kernel_dir();
         // Check version file in kernel directory
-        let version_file = self.kernel_dir.join("kernel_version.json");
+        let version_file = kernel_dir.join("kernel_version.json");
         if version_file.exists() {
             if let Ok(content) = std::fs::read_to_string(&version_file) {
                 if let Ok(info) = serde_json::from_str(&content) {
@@ -94,7 +107,7 @@ impl KernelDownloader {
         // If no version file, check if kernel exists and return basic info
         if self.is_kernel_installed() {
             return Some(KernelVersionInfo {
-                version: "v139".to_string(),
+                version: format!("v{}", self.kernel_version),
                 build_date: "unknown".to_string(),
                 platform: "win64".to_string(),
                 source: "local".to_string(),
@@ -139,12 +152,13 @@ impl KernelDownloader {
         }
 
         // 确保内核目录存在
-        fs::create_dir_all(&self.kernel_dir)
+        let kernel_dir = self.get_kernel_dir();
+        fs::create_dir_all(&kernel_dir)
             .await
             .context("Failed to create kernel directory")?;
 
         // 解压文件
-        self.extract_zip(&temp_file, &self.kernel_dir).await?;
+        self.extract_zip(&temp_file, &kernel_dir).await?;
 
         // 清理临时文件
         let _ = fs::remove_file(&temp_file).await;
@@ -301,29 +315,31 @@ impl KernelDownloader {
 
     /// 删除已安装的内核
     pub async fn uninstall(&self) -> Result<()> {
-        if self.kernel_dir.exists() {
-            fs::remove_dir_all(&self.kernel_dir)
+        let kernel_dir = self.get_kernel_dir();
+        if kernel_dir.exists() {
+            fs::remove_dir_all(&kernel_dir)
                 .await
                 .context("Failed to remove kernel directory")?;
-            info!("Kernel uninstalled from: {:?}", self.kernel_dir);
+            info!("Kernel uninstalled from: {:?}", kernel_dir);
         }
         Ok(())
     }
 
     /// Get kernel executable path
     pub fn get_kernel_exe_path(&self) -> PathBuf {
-        // Kernel is in win32 subdirectory after extraction
+        let kernel_dir = self.get_kernel_dir();
+        // Kernel executable path varies by OS
         #[cfg(target_os = "windows")]
         {
-            self.kernel_dir.join("win32").join("chrome.exe")
+            kernel_dir.join("chrome.exe")
         }
         #[cfg(target_os = "macos")]
         {
-            self.kernel_dir.join("darwin").join("Chromium.app").join("Contents").join("MacOS").join("Chromium")
+            kernel_dir.join("Chromium.app").join("Contents").join("MacOS").join("Chromium")
         }
         #[cfg(target_os = "linux")]
         {
-            self.kernel_dir.join("linux").join("chrome")
+            kernel_dir.join("chrome")
         }
     }
 
@@ -450,6 +466,71 @@ impl KernelDownloader {
         versions.sort_by(|a, b| b.cmp(a)); // Sort descending
         versions
     }
+
+    /// 检查并解压内嵌的内核压缩包 (首次运行时)
+    /// 
+    /// 如果内核未安装且存在内嵌的压缩包,则自动解压
+    /// 
+    /// # Arguments
+    /// * `bundled_zip_path` - 内嵌压缩包的路径 (通常在 resources 目录)
+    /// * `progress_callback` - 进度回调函数
+    /// 
+    /// # Returns
+    /// * `Ok(true)` - 成功解压内嵌内核
+    /// * `Ok(false)` - 内核已存在或无需解压
+    /// * `Err(_)` - 解压失败
+    pub async fn extract_bundled_kernel(
+        &self,
+        bundled_zip_path: &Path,
+        progress_callback: impl Fn(DownloadProgress),
+    ) -> Result<bool> {
+        // 如果内核已安装,无需解压
+        if self.is_kernel_installed() {
+            info!("Kernel already installed, skip bundled extraction");
+            return Ok(false);
+        }
+
+        // 检查内嵌压缩包是否存在
+        if !bundled_zip_path.exists() {
+            info!("No bundled kernel found at: {:?}", bundled_zip_path);
+            return Ok(false);
+        }
+
+        info!("Found bundled kernel at: {:?}", bundled_zip_path);
+        let kernel_dir = self.get_kernel_dir();
+        info!("Extracting bundled kernel to: {:?}", kernel_dir);
+
+        // 更新状态为解压中
+        {
+            let mut progress = self.progress.lock().await;
+            progress.status = DownloadStatus::Extracting;
+            progress.message = "正在解压内嵌的浏览器内核...".to_string();
+            progress.downloaded = 0;
+            progress.total = None;
+            progress_callback(progress.clone());
+        }
+
+        // 确保目标目录存在
+        fs::create_dir_all(&kernel_dir)
+            .await
+            .context("Failed to create kernel directory")?;
+
+        // 解压内嵌的压缩包
+        self.extract_zip(bundled_zip_path, &kernel_dir)
+            .await
+            .context("Failed to extract bundled kernel")?;
+
+        // 更新状态为完成
+        {
+            let mut progress = self.progress.lock().await;
+            progress.status = DownloadStatus::Completed;
+            progress.message = "内嵌内核解压完成!".to_string();
+            progress_callback(progress.clone());
+        }
+
+        info!("Bundled kernel extracted successfully");
+        Ok(true)
+    }
 }
 
 /// 默认内核下载 URL
@@ -466,3 +547,4 @@ pub fn get_kernel_download_url(base_url: &str, version: &str) -> String {
 
     format!("{}/chromium-kernel-{}-v{}.zip", base_url, platform, version)
 }
+

@@ -48,7 +48,7 @@ jobs:
       - name: 安装前端依赖
         run: npm ci
 
-      - name: 构建 Tauri 应用
+      - name: 构建 Tauri 应用 (标准版 - 不含内核)
         run: npm run tauri build -- --target ${{ matrix.platform.rust_target }}
 
       - name: 获取版本号
@@ -56,7 +56,7 @@ jobs:
         shell: bash
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
-      - name: 收集安装包文件
+      - name: 收集标准版安装包
         shell: pwsh
         run: |
           $version = "${{ steps.get_version.outputs.VERSION }}"
@@ -66,65 +66,62 @@ jobs:
           # 创建输出目录
           New-Item -ItemType Directory -Force -Path "release-files" | Out-Null
           
-          # 复制并重命名 MSI (标准版 - 不含内核)
+          # 复制并重命名 MSI (标准版)
           if (Test-Path "$bundleDir/msi/*.msi") {
             $msi = Get-Item "$bundleDir/msi/*.msi" | Select-Object -First 1
             $newName = "browser-manager_${version}_${arch}.msi"
             Copy-Item $msi.FullName -Destination "release-files/$newName"
+            Write-Host "✓ 标准版 MSI: $newName"
           }
           
-          # 复制并重命名 NSIS (标准版 - 不含内核)
+          # 复制并重命名 NSIS (标准版)
           if (Test-Path "$bundleDir/nsis/*setup.exe") {
             $nsis = Get-Item "$bundleDir/nsis/*setup.exe" | Select-Object -First 1
             $newName = "browser-manager_${version}_${arch}_setup.exe"
             Copy-Item $nsis.FullName -Destination "release-files/$newName"
-          }
-          
-          # 打包独立内核
-          $kernelDir = "resources/kernel/win32"
-          if (Test-Path $kernelDir) {
-            # 检查是否有实际的内核文件(不只是 .gitkeep)
-            $kernelFiles = Get-ChildItem $kernelDir -Exclude ".gitkeep" -ErrorAction SilentlyContinue
-            if ($kernelFiles.Count -gt 0) {
-              $zipName = "kernel_${version}_windows_${arch}.zip"
-              Compress-Archive -Path "$kernelDir/*" -DestinationPath "release-files/$zipName" -Force
-              Write-Host "✓ 内核已打包: $zipName"
-              
-              # 标记有内核文件
-              echo "HAS_KERNEL=true" >> $env:GITHUB_ENV
-            } else {
-              Write-Host "⚠ 内核目录为空,跳过内核打包"
-              echo "HAS_KERNEL=false" >> $env:GITHUB_ENV
-            }
+            Write-Host "✓ 标准版 NSIS: $newName"
           }
 
-      - name: 构建完整版 (仅当有内核时)
-        if: env.HAS_KERNEL == 'true'
+      - name: 构建完整版 (含内核压缩包)
         shell: pwsh
         run: |
           $version = "${{ steps.get_version.outputs.VERSION }}"
           $arch = "${{ matrix.platform.arch }}"
-          $bundleDir = "src-tauri/target/${{ matrix.platform.rust_target }}/release/bundle"
+          $kernelZip = "resources/chromium-146-windows-x64.zip"
           
-          Write-Host "开始构建完整版(包含内核)..."
-          
-          # 重新构建 Tauri 应用(这次包含内核)
-          npm run tauri build -- --target ${{ matrix.platform.rust_target }}
-          
-          # 复制并重命名完整版 MSI
-          if (Test-Path "$bundleDir/msi/*.msi") {
-            $msi = Get-Item "$bundleDir/msi/*.msi" | Select-Object -First 1
-            $newName = "browser-manager_${version}_${arch}_full.msi"
-            Copy-Item $msi.FullName -Destination "release-files/$newName"
-            Write-Host "✓ 完整版 MSI: $newName"
-          }
-          
-          # 复制并重命名完整版 NSIS
-          if (Test-Path "$bundleDir/nsis/*setup.exe") {
-            $nsis = Get-Item "$bundleDir/nsis/*setup.exe" | Select-Object -First 1
-            $newName = "browser-manager_${version}_${arch}_full_setup.exe"
-            Copy-Item $nsis.FullName -Destination "release-files/$newName"
-            Write-Host "✓ 完整版 NSIS: $newName"
+          # 检查内核压缩包是否存在
+          if (Test-Path $kernelZip) {
+            Write-Host "开始构建完整版 (含内嵌内核)..."
+            
+            # 复制内核压缩包到独立的 release-files
+            Copy-Item $kernelZip -Destination "release-files/chromium-146-windows-x64.zip"
+            Write-Host "✓ 内核压缩包已复制"
+            
+            # 重新构建 Tauri 应用 (会自动打包内核压缩包)
+            npm run tauri build -- --target ${{ matrix.platform.rust_target }}
+            
+            $bundleDir = "src-tauri/target/${{ matrix.platform.rust_target }}/release/bundle"
+            
+            # 复制并重命名完整版 MSI
+            if (Test-Path "$bundleDir/msi/*.msi") {
+              $msi = Get-Item "$bundleDir/msi/*.msi" | Select-Object -First 1
+              $newName = "browser-manager_${version}_${arch}_full.msi"
+              Copy-Item $msi.FullName -Destination "release-files/$newName"
+              Write-Host "✓ 完整版 MSI: $newName"
+            }
+            
+            # 复制并重命名完整版 NSIS
+            if (Test-Path "$bundleDir/nsis/*setup.exe") {
+              $nsis = Get-Item "$bundleDir/nsis/*setup.exe" | Select-Object -First 1
+              $newName = "browser-manager_${version}_${arch}_full_setup.exe"
+              Copy-Item $nsis.FullName -Destination "release-files/$newName"
+              Write-Host "✓ 完整版 NSIS: $newName"
+            }
+            
+            echo "HAS_FULL_VERSION=true" >> $env:GITHUB_ENV
+          } else {
+            Write-Host "⚠ 未找到内核压缩包,跳过完整版构建"
+            echo "HAS_FULL_VERSION=false" >> $env:GITHUB_ENV
           }
 
       - name: 上传到 GitHub Release
@@ -139,20 +136,27 @@ jobs:
             
             ### 📦 安装包说明
             
-            **标准版 (推荐)**
-            - `browser-manager_*_x64.msi` / `*_x64_setup.exe` - 64位启动器(不含内核)
-            - `browser-manager_*_x86.msi` / `*_x86_setup.exe` - 32位启动器(不含内核)
-            - 体积小,首次使用时会提示下载内核
+            **标准版 (推荐 - 体积小)**
+            - `browser-manager_*_x64.msi` / `*_x64_setup.exe` - 64位标准版
+            - `browser-manager_*_x86.msi` / `*_x86_setup.exe` - 32位标准版
+            - 仅包含启动器,不含浏览器内核
+            - 安装包大小: ~8 MB
+            - 首次使用时需要下载内核 (约 174 MB)
             
-            **完整版 (可选)**
-            - `browser-manager_*_x64_full.msi` / `*_x64_full_setup.exe` - 64位完整版(含内核)
-            - `browser-manager_*_x86_full.msi` / `*_x86_full_setup.exe` - 32位完整版(含内核)
-            - 体积大,安装后即可使用,无需额外下载
+            **完整版 (可选 - 开箱即用)**
+            - `browser-manager_*_x64_full.msi` / `*_x64_full_setup.exe` - 64位完整版
+            - `browser-manager_*_x86_full.msi` / `*_x86_full_setup.exe` - 32位完整版
+            - 包含启动器 + 内嵌 Chromium 146 内核
+            - 安装包大小: ~180 MB
+            - 首次运行时自动解压内核 (约需 30秒-1分钟)
+            - 安装后即可使用,无需额外下载
             
-            **独立内核包**
-            - `kernel_*_windows_*.zip` - 浏览器内核压缩包(手动安装用)
+            **独立内核包** (可选,手动安装用)
+            - `chromium-146-windows-x64.zip` - Chromium 146 浏览器内核
+            - 如需手动安装或升级内核,可下载此文件
             
-            ### 💡 使用建议
-            - **网络良好**: 推荐下载标准版,体积小,更新快
+            ### 💡 版本选择建议
+            - **网络良好**: 推荐下载标准版,体积小,安装快
             - **网络受限**: 推荐下载完整版,一次性安装完成
+            - **企业部署**: 推荐完整版,减少网络依赖
 

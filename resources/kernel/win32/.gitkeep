@@ -1,9 +1,0 @@
-# 占位文件 - Windows x64 浏览器内核
-# 请将编译好的 Chromium 文件放置于此目录
-# 
-# 必需文件:
-# - chrome.exe (主程序)
-# - chrome.dll
-# - locales/ (语言包目录)
-# - resources.pak
-# - icudtl.dat
