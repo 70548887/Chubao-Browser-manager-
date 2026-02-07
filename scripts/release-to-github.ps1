@@ -1,17 +1,17 @@
-# GitHub 发布脚本
-# 用途：提交代码、打 tag、触发 GitHub Actions 自动构建
+# GitHub Release Script
+# Purpose: Commit code, create tag, trigger GitHub Actions
 
 param(
     [Parameter(Mandatory=$false)]
     [string]$Version = "",
     
     [Parameter(Mandatory=$false)]
-    [string]$Message = "发布新版本"
+    [string]$Message = "Release new version"
 )
 
 $ErrorActionPreference = "Stop"
 
-# 颜色输出
+# Color output
 function Write-Step {
     param([string]$Message)
     Write-Host "`n[$([DateTime]::Now.ToString('HH:mm:ss'))] " -ForegroundColor Gray -NoNewline
@@ -20,93 +20,122 @@ function Write-Step {
 
 function Write-Success {
     param([string]$Message)
-    Write-Host "  ✓ " -ForegroundColor Green -NoNewline
+    Write-Host "  [OK] " -ForegroundColor Green -NoNewline
     Write-Host $Message -ForegroundColor White
 }
 
 function Write-Error-Custom {
     param([string]$Message)
-    Write-Host "  ✗ " -ForegroundColor Red -NoNewline
+    Write-Host "  [ERROR] " -ForegroundColor Red -NoNewline
     Write-Host $Message -ForegroundColor Red
 }
 
-# 检查 Git 仓库
+# Check Git repo
 if (-not (Test-Path ".git")) {
-    Write-Error-Custom "当前目录不是 Git 仓库"
+    Write-Error-Custom "Current directory is not a Git repository"
     exit 1
 }
 
-# 获取版本号
+# Get version
 if ([string]::IsNullOrEmpty($Version)) {
-    $tauri_config = Get-Content "src-tauri/tauri.conf.json" | ConvertFrom-Json
-    $Version = $tauri_config.version
-    Write-Step "从 tauri.conf.json 读取版本号: v$Version"
+    # Use a simple text search to get version, avoiding JSON parsing issues with encoding
+    $tauriConf = Get-Content "src-tauri/tauri.conf.json" -Raw -Encoding UTF8
+    $versionMatch = [regex]::Match($tauriConf, '"version"\s*:\s*"([^"]+)"')
+    if ($versionMatch.Success) {
+        $Version = $versionMatch.Groups[1].Value
+        Write-Step "Get version from tauri.conf.json: v$Version"
+    } else {
+        Write-Error-Custom "Could not find version in tauri.conf.json"
+        exit 1
+    }
 } else {
-    Write-Step "使用指定版本号: v$Version"
+    Write-Step "Using specified version: v$Version"
 }
 
-# 检查是否有未提交的更改
-Write-Step "检查 Git 状态..."
+# Check for uncommitted changes
+Write-Step "Checking Git status..."
 $gitStatus = git status --porcelain
 if ($gitStatus) {
-    Write-Host "`n未提交的更改：" -ForegroundColor Yellow
+    Write-Host "`nUncommitted changes:" -ForegroundColor Yellow
     git status --short
     Write-Host ""
     
-    $response = Read-Host "是否提交这些更改？(y/n)"
+    $response = Read-Host "Commit these changes? (y/n)"
     if ($response -eq 'y' -or $response -eq 'Y') {
         git add .
         git commit -m "$Message v$Version"
-        Write-Success "已提交更改"
+        Write-Success "Changes committed"
     } else {
-        Write-Error-Custom "请先提交更改后再发布"
+        Write-Error-Custom "Please commit changes before release"
         exit 1
     }
 } else {
-    Write-Success "工作区干净"
+    Write-Success "Working directory clean"
 }
 
-# 检查 tag 是否已存在
+# Check if tag exists
 $existingTag = git tag -l "v$Version"
 if ($existingTag) {
     Write-Host ""
-    Write-Host "  警告: Tag v$Version 已存在" -ForegroundColor Yellow
-    $response = Read-Host "是否删除旧 tag 并重新创建？(y/n)"
+    Write-Host "  Warning: Tag v$Version already exists" -ForegroundColor Yellow
+    $response = Read-Host "Delete old tag and recreate? (y/n)"
     if ($response -eq 'y' -or $response -eq 'Y') {
         git tag -d "v$Version"
         git push origin --delete "v$Version" 2>$null
-        Write-Success "已删除旧 tag"
+        Write-Success "Old tag deleted"
     } else {
-        Write-Error-Custom "发布已取消"
+        Write-Error-Custom "Release cancelled"
         exit 1
     }
 }
 
-# 创建 tag
-Write-Step "创建 Git Tag: v$Version"
+# Create tag
+Write-Step "Creating Git Tag: v$Version"
+
+# Verify remote tag does not exist
+$existingRemoteTag = git ls-remote --tags origin "v$Version" 2>$null
+if ($existingRemoteTag) {
+    Write-Host "  Warning: Remote repository already has tag v$Version" -ForegroundColor Yellow
+    Write-Host "  Please delete remote tag or use a new version number" -ForegroundColor Yellow
+    exit 1
+}
+
 git tag -a "v$Version" -m "Release v$Version"
-Write-Success "Tag 创建成功"
+Write-Success "Tag created successfully"
 
-# 推送到远程
-Write-Step "推送到 GitHub..."
-git push origin main
-git push origin "v$Version"
-Write-Success "推送成功"
+# Push to remote
+Write-Step "Pushing to GitHub..."
 
-# 完成
+# Push main branch
+$pushResult = git push origin main 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Error-Custom "Push main branch failed: $pushResult"
+    exit 1
+}
+
+# Push tag
+$tagPushResult = git push origin "v$Version" 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Error-Custom "Push tag failed: $tagPushResult"
+    exit 1
+}
+
+Write-Success "Push successful"
+
+# Complete
 Write-Host ""
-Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
-Write-Host "  🎉 发布流程已启动！" -ForegroundColor Green
-Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+Write-Host "===========================================" -ForegroundColor Green
+Write-Host "  Release Process Started!" -ForegroundColor Green
+Write-Host "===========================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "  版本: " -NoNewline; Write-Host "v$Version" -ForegroundColor Yellow
+Write-Host "  Version: " -NoNewline; Write-Host "v$Version" -ForegroundColor Yellow
 Write-Host ""
-Write-Host "  📋 后续步骤:" -ForegroundColor Cyan
-Write-Host "     1. 访问 GitHub Actions 查看构建进度" -ForegroundColor Gray
-Write-Host "        https://github.com/你的用户名/browser-manager/actions" -ForegroundColor Gray
+Write-Host "  Next Steps:" -ForegroundColor Cyan
+Write-Host "     1. Check GitHub Actions for build progress" -ForegroundColor Gray
+Write-Host "        https://github.com/your-username/browser-manager/actions" -ForegroundColor Gray
 Write-Host ""
-Write-Host "     2. 构建完成后，在 Releases 页面查看发布" -ForegroundColor Gray
-Write-Host "        https://github.com/你的用户名/browser-manager/releases" -ForegroundColor Gray
+Write-Host "     2. After build completes, check releases page" -ForegroundColor Gray
+Write-Host "        https://github.com/your-username/browser-manager/releases" -ForegroundColor Gray
 Write-Host ""
-Write-Host "     3. 更新后端 API 的版本信息和下载地址" -ForegroundColor Gray
+Write-Host "     3. Update backend API version info and download URLs" -ForegroundColor Gray
 Write-Host ""
