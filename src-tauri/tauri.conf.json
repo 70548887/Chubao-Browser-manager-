@@ -38,7 +38,7 @@
       "icons/icon.ico"
     ],
     "resources": [
-      "../resources/chromium-146-windows-x64.zip"
+      "../resources/chromium-146-windows-x64.zip.0*"
     ],
     "windows": {
       "certificateThumbprint": null,

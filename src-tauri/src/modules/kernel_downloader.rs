@@ -469,6 +469,10 @@ impl KernelDownloader {
 
     /// 检查并解压内嵌的内核压缩包 (首次运行时)
     /// 
+    /// 支持两种形式:
+    /// 1. 完整 ZIP 文件: chromium-146-windows-x64.zip
+    /// 2. 分卷文件: chromium-146-windows-x64.zip.001 + .002
+    /// 
     /// 如果内核未安装且存在内嵌的压缩包,则自动解压
     /// 
     /// # Arguments
@@ -490,13 +494,26 @@ impl KernelDownloader {
             return Ok(false);
         }
 
-        // 检查内嵌压缩包是否存在
-        if !bundled_zip_path.exists() {
-            info!("No bundled kernel found at: {:?}", bundled_zip_path);
-            return Ok(false);
-        }
+        // 检查分卷文件或完整文件
+        let zip_path_to_extract = if bundled_zip_path.exists() {
+            // 情况1: 完整 ZIP 文件存在
+            info!("Found complete bundled kernel at: {:?}", bundled_zip_path);
+            bundled_zip_path.to_path_buf()
+        } else {
+            // 情况2: 检查分卷文件
+            let volume1 = bundled_zip_path.with_extension("zip.001");
+            if volume1.exists() {
+                info!("Found split volume bundled kernel at: {:?}", volume1);
+                
+                // 合并分卷文件
+                let merged_path = self.merge_split_volumes(&volume1, &progress_callback).await?;
+                merged_path
+            } else {
+                info!("No bundled kernel found (neither complete nor split volumes)");
+                return Ok(false);
+            }
+        };
 
-        info!("Found bundled kernel at: {:?}", bundled_zip_path);
         let kernel_dir = self.get_kernel_dir();
         info!("Extracting bundled kernel to: {:?}", kernel_dir);
 
@@ -516,9 +533,15 @@ impl KernelDownloader {
             .context("Failed to create kernel directory")?;
 
         // 解压内嵌的压缩包
-        self.extract_zip(bundled_zip_path, &kernel_dir)
+        self.extract_zip(&zip_path_to_extract, &kernel_dir)
             .await
             .context("Failed to extract bundled kernel")?;
+
+        // 如果是临时合并的文件,清理它
+        if zip_path_to_extract != bundled_zip_path {
+            let _ = fs::remove_file(&zip_path_to_extract).await;
+            info!("Cleaned up temporary merged file: {:?}", zip_path_to_extract);
+        }
 
         // 更新状态为完成
         {
@@ -530,6 +553,91 @@ impl KernelDownloader {
 
         info!("Bundled kernel extracted successfully");
         Ok(true)
+    }
+
+    /// 合并分卷压缩文件
+    /// 
+    /// # Arguments
+    /// * `first_volume` - 第一个分卷文件路径 (例如: xxx.zip.001)
+    /// * `progress_callback` - 进度回调函数
+    /// 
+    /// # Returns
+    /// * `Ok(PathBuf)` - 合并后的完整文件路径
+    /// * `Err(_)` - 合并失败
+    async fn merge_split_volumes(
+        &self,
+        first_volume: &Path,
+        progress_callback: &impl Fn(DownloadProgress),
+    ) -> Result<PathBuf> {
+        info!("Merging split volumes starting from: {:?}", first_volume);
+
+        // 获取基础文件名 (移除 .001 扩展名)
+        let base_name = first_volume
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .context("Invalid volume filename")?;
+        
+        let output_path = first_volume.parent()
+            .context("Invalid volume parent directory")?
+            .join(base_name);
+
+        // 更新状态
+        {
+            let mut progress = self.progress.lock().await;
+            progress.status = DownloadStatus::Downloading;
+            progress.message = "正在合并分卷文件...".to_string();
+            progress.downloaded = 0;
+            progress_callback(progress.clone());
+        }
+
+        // 打开输出文件
+        let mut output_file = tokio::fs::File::create(&output_path)
+            .await
+            .context("Failed to create merged file")?;
+
+        // 依次读取并合并所有分卷
+        let mut volume_index = 1;
+        let mut total_merged = 0u64;
+
+        loop {
+            let volume_path = first_volume
+                .parent()
+                .unwrap()
+                .join(format!("{}.{:03}", base_name, volume_index));
+
+            if !volume_path.exists() {
+                // 没有更多分卷了
+                break;
+            }
+
+            info!("Merging volume #{}: {:?}", volume_index, volume_path);
+
+            // 读取分卷内容并写入输出文件
+            let mut volume_file = tokio::fs::File::open(&volume_path)
+                .await
+                .context("Failed to open volume file")?;
+
+            let bytes_copied = tokio::io::copy(&mut volume_file, &mut output_file)
+                .await
+                .context("Failed to copy volume data")?;
+
+            total_merged += bytes_copied;
+
+            // 更新进度
+            {
+                let mut progress = self.progress.lock().await;
+                progress.downloaded = total_merged;
+                progress.message = format!("已合并分卷 #{}", volume_index);
+                progress_callback(progress.clone());
+            }
+
+            volume_index += 1;
+        }
+
+        info!("Successfully merged {} volumes, total size: {} bytes", 
+              volume_index - 1, total_merged);
+
+        Ok(output_path)
     }
 }
 

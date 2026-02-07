@@ -88,14 +88,24 @@ jobs:
           $version = "${{ steps.get_version.outputs.VERSION }}"
           $arch = "${{ matrix.platform.arch }}"
           $kernelZip = "resources/chromium-146-windows-x64.zip"
+          $kernelVol1 = "resources/chromium-146-windows-x64.zip.001"
+          $kernelVol2 = "resources/chromium-146-windows-x64.zip.002"
           
-          # 检查内核压缩包是否存在
+          # 检查内核压缩包是否存在 (完整或分卷)
+          $hasKernel = $false
           if (Test-Path $kernelZip) {
-            Write-Host "开始构建完整版 (含内嵌内核)..."
-            
-            # 复制内核压缩包到独立的 release-files
+            Write-Host "✓ 找到完整内核压缩包: $kernelZip"
             Copy-Item $kernelZip -Destination "release-files/chromium-146-windows-x64.zip"
-            Write-Host "✓ 内核压缩包已复制"
+            $hasKernel = $true
+          } elseif ((Test-Path $kernelVol1) -and (Test-Path $kernelVol2)) {
+            Write-Host "✓ 找到分卷内核压缩包"
+            Copy-Item $kernelVol1 -Destination "release-files/chromium-146-windows-x64.zip.001"
+            Copy-Item $kernelVol2 -Destination "release-files/chromium-146-windows-x64.zip.002"
+            $hasKernel = $true
+          }
+          
+          if ($hasKernel) {
+            Write-Host "开始构建完整版 (含内嵌内核)..."
             
             # 重新构建 Tauri 应用 (会自动打包内核压缩包)
             npm run tauri build -- --target ${{ matrix.platform.rust_target }}
@@ -152,8 +162,10 @@ jobs:
             - 安装后即可使用,无需额外下载
             
             **独立内核包** (可选,手动安装用)
-            - `chromium-146-windows-x64.zip` - Chromium 146 浏览器内核
-            - 如需手动安装或升级内核,可下载此文件
+            - `chromium-146-windows-x64.zip` - Chromium 146 浏览器内核 (完整包)
+            - `chromium-146-windows-x64.zip.001` + `.zip.002` - 分卷压缩包 (95MB + 75MB)
+            - 支持两种形式: 完整ZIP或分卷,应用会自动识别并解压
+            - 如需手动安装或升级内核,可下载任一形式
             
             ### 💡 版本选择建议
             - **网络良好**: 推荐下载标准版,体积小,安装快
