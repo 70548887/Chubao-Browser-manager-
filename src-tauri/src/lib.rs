@@ -2553,11 +2553,12 @@ pub fn run() {
                         tracing::info!("检查生产模式路径: {:?}", path);
                         path
                     }),
-                // 开发模式: 项目根目录/resources
+                // 开发模式: 项目根目录/resources (向上一级目录)
                 std::env::current_dir()
                     .ok()
-                    .map(|cwd| {
-                        let path = cwd.join("resources").join("chromium-146-windows-x64.zip");
+                    .and_then(|cwd| cwd.parent().map(|p| p.to_path_buf()))
+                    .map(|project_root| {
+                        let path = project_root.join("resources").join("chromium-146-windows-x64.zip");
                         tracing::info!("检查开发模式路径: {:?}", path);
                         path
                     }),
