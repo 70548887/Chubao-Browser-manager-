@@ -41,6 +41,7 @@ jobs:
               draft: true,
               prerelease: false
             })
+            core.setOutput('upload_url', data.upload_url)
             return data.id
 
   build-tauri:
