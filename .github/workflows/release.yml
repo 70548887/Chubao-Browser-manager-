@@ -8,44 +8,12 @@ on:
 
 permissions:
   contents: write
-  actions: write
   
 env:
   RUST_BACKTRACE: 1
 
 jobs:
-  create-release:
-    runs-on: ubuntu-latest
-    outputs:
-      release_id: ${{ steps.create-release.outputs.result }}
-      release_upload_url: ${{ steps.create-release.outputs.upload_url }}
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: 获取版本号
-        id: get_version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-      
-      - name: 创建 Release
-        id: create-release
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const { data } = await github.rest.repos.createRelease({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              tag_name: `v${{ steps.get_version.outputs.VERSION }}`,
-              name: `触宝指纹浏览器 v${{ steps.get_version.outputs.VERSION }}`,
-              body: '自动发布的版本，详见更新日志。',
-              draft: true,
-              prerelease: false
-            })
-            core.setOutput('upload_url', data.upload_url)
-            return data.id
-
   build-tauri:
-    needs: create-release
     strategy:
       fail-fast: false
       matrix:
@@ -88,86 +56,49 @@ jobs:
         shell: bash
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
-      - name: 重命名安装包
+      - name: 收集安装包文件
         shell: pwsh
         run: |
           $version = "${{ steps.get_version.outputs.VERSION }}"
           $arch = "${{ matrix.platform.arch }}"
           $bundleDir = "src-tauri/target/${{ matrix.platform.rust_target }}/release/bundle"
           
-          # 重命名 MSI
+          # 创建输出目录
+          New-Item -ItemType Directory -Force -Path "release-files" | Out-Null
+          
+          # 复制并重命名 MSI
           if (Test-Path "$bundleDir/msi/*.msi") {
             $msi = Get-Item "$bundleDir/msi/*.msi" | Select-Object -First 1
             $newName = "browser-manager_${version}_${arch}.msi"
-            Rename-Item $msi.FullName -NewName $newName
-            echo "MSI_PATH=$bundleDir/msi/$newName" >> $env:GITHUB_ENV
+            Copy-Item $msi.FullName -Destination "release-files/$newName"
           }
           
-          # 重命名 NSIS
+          # 复制并重命名 NSIS
           if (Test-Path "$bundleDir/nsis/*setup.exe") {
             $nsis = Get-Item "$bundleDir/nsis/*setup.exe" | Select-Object -First 1
             $newName = "browser-manager_${version}_${arch}_setup.exe"
-            Rename-Item $nsis.FullName -NewName $newName
-            echo "NSIS_PATH=$bundleDir/nsis/$newName" >> $env:GITHUB_ENV
+            Copy-Item $nsis.FullName -Destination "release-files/$newName"
           }
-
-      - name: 上传 MSI 到 Release
-        if: env.MSI_PATH != ''
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.release_upload_url }}
-          asset_path: ${{ env.MSI_PATH }}
-          asset_name: browser-manager_${{ steps.get_version.outputs.VERSION }}_${{ matrix.platform.arch }}.msi
-          asset_content_type: application/x-msi
-
-      - name: 上传 NSIS 到 Release
-        if: env.NSIS_PATH != ''
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.release_upload_url }}
-          asset_path: ${{ env.NSIS_PATH }}
-          asset_name: browser-manager_${{ steps.get_version.outputs.VERSION }}_${{ matrix.platform.arch }}_setup.exe
-          asset_content_type: application/octet-stream
-
-      - name: 打包内核
-        shell: pwsh
-        run: |
-          $version = "${{ steps.get_version.outputs.VERSION }}"
-          $arch = "${{ matrix.platform.arch }}"
-          $kernelDir = "resources/kernel/win32"
           
+          # 打包内核
+          $kernelDir = "resources/kernel/win32"
           if (Test-Path $kernelDir) {
             $zipName = "kernel_${version}_windows_${arch}.zip"
-            Compress-Archive -Path "$kernelDir/*" -DestinationPath $zipName -Force
-            echo "KERNEL_PATH=$zipName" >> $env:GITHUB_ENV
+            Compress-Archive -Path "$kernelDir/*" -DestinationPath "release-files/$zipName" -Force
           }
 
-      - name: 上传内核到 Release
-        if: env.KERNEL_PATH != ''
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: 上传到 GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          upload_url: ${{ needs.create-release.outputs.release_upload_url }}
-          asset_path: ${{ env.KERNEL_PATH }}
-          asset_name: kernel_${{ steps.get_version.outputs.VERSION }}_windows_${{ matrix.platform.arch }}.zip
-          asset_content_type: application/zip
+          draft: true
+          files: release-files/*
+          body: |
+            ## 触宝指纹浏览器 v${{ steps.get_version.outputs.VERSION }}
+            
+            自动发布的版本，详见更新日志。
+            
+            ### 安装包说明
+            - `*_x64.msi` / `*_x64_setup.exe` - 64位 Windows 安装包
+            - `*_x86.msi` / `*_x86_setup.exe` - 32位 Windows 安装包
+            - `kernel_*_windows_*.zip` - 浏览器内核压缩包
 
-  publish-release:
-    needs: [create-release, build-tauri]
-    runs-on: ubuntu-latest
-    steps:
-      - name: 发布 Release
-        uses: actions/github-script@v7
-        with:
-          script: |
-            await github.rest.repos.updateRelease({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              release_id: ${{ needs.create-release.outputs.release_id }},
-              draft: false
-            })
